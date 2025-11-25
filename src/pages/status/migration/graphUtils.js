@@ -252,7 +252,7 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   // Get related nodes and edges from our data structure
   const outgoingEdgeIds = nodeMap[nodeId]?.outgoing || [];
   const incomingEdgeIds = nodeMap[nodeId]?.incoming || [];
-  const allRelatedEdgeIds = [...outgoingEdgeIds, ...incomingEdgeIds];
+  const allRelatedEdgeIds = new Set([...outgoingEdgeIds, ...incomingEdgeIds]);
 
   const childNodeIds = outgoingEdgeIds.map(eid => edgeMap[eid].target);
   const parentNodeIds = incomingEdgeIds.map(eid => edgeMap[eid].source);
@@ -270,7 +270,7 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   // Highlight related edges (both incoming and outgoing)
   svgGroup.selectAll("g.edgePath").each(function () {
     const eid = d3.select(this).attr("data-edge-id");
-    if (allRelatedEdgeIds.includes(eid)) {
+    if (allRelatedEdgeIds.has(eid)) {
       // Move to front
       this.parentNode.appendChild(this);
 
