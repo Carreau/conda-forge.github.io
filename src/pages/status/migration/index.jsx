@@ -511,7 +511,7 @@ function ImpactTable({ feedstockStatus, details }) {
       case "unstable":
         return "#ffc107"; // Yellow
       case "unknown":
-        return "#6c757d"; // Gray
+        return "#adb5bd"; // Lighter gray
       default:
         return "#e9ecef"; // Light gray for awaiting
     }
@@ -684,8 +684,157 @@ function ImpactTable({ feedstockStatus, details }) {
   useEffect(() => {
     if (!graph || !svgRef.current) return;
 
-    // === STATE FOR PERSISTENT HIGHLIGHTING ===
+    // === STATE FOR PERSISTENT HIGHLIGHTING AND ZOOMED VIEW ===
     let selectedNodeId = null;
+    let isZoomedView = false;
+
+    // === HELPER FUNCTION TO REBUILD GRAPH FROM BACKUP ===
+    const rebuildOriginalGraph = () => {
+      // Get the set of merged packages (in "done" category)
+      const mergedPackages = new Set(details?.done || []);
+
+      // === OPTIMIZE LAYOUT: FIND CONNECTED COMPONENTS ===
+      const visited = new Set();
+      const components = [];
+
+      const dfs = (nodeId, component, visited) => {
+        if (visited.has(nodeId)) return;
+        visited.add(nodeId);
+        component.add(nodeId);
+
+        const data = feedstockStatus[nodeId];
+        if (data) {
+          if (data.immediate_children && Array.isArray(data.immediate_children)) {
+            data.immediate_children.forEach((child) => {
+              if (feedstockStatus[child] && !mergedPackages.has(child)) {
+                dfs(child, component, visited);
+              }
+            });
+          }
+        }
+
+        Object.entries(feedstockStatus).forEach(([potentialParent, parentData]) => {
+          if (
+            parentData.immediate_children &&
+            parentData.immediate_children.includes(nodeId) &&
+            !mergedPackages.has(potentialParent)
+          ) {
+            dfs(potentialParent, component, visited);
+          }
+        });
+      };
+
+      // First pass: identify nodes that have direct children and aren't merged
+      const nodesWithChildren = new Set();
+      Object.entries(feedstockStatus).forEach(([name, data]) => {
+        if (mergedPackages.has(name)) {
+          return;
+        }
+
+        if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
+          const hasNonMergedChild = data.immediate_children.some(child => !mergedPackages.has(child));
+          if (hasNonMergedChild) {
+            nodesWithChildren.add(name);
+          }
+        }
+      });
+
+      nodesWithChildren.forEach((name) => {
+        if (!visited.has(name)) {
+          const component = new Set();
+          dfs(name, component, visited);
+          if (component.size > 0) {
+            components.push(component);
+          }
+        }
+      });
+
+      // Create graph with compound structure
+      const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
+        .setGraph({
+          nodesep: 50,
+          ranksep: 100,
+          rankdir: "TB",
+        })
+        .setDefaultEdgeLabel(() => ({}));
+
+      // Add compound nodes (subgraphs) for each component
+      components.forEach((component, componentIndex) => {
+        const componentId = `component-${componentIndex}`;
+        g.setNode(componentId, {
+          label: "",
+          clusterLabelPos: "top",
+          style: "fill: none; stroke: #ccc; stroke-width: 1px; stroke-dasharray: 5,5;",
+        });
+      });
+
+      // Add nodes to their components
+      const nodeToComponent = {};
+      components.forEach((component, componentIndex) => {
+        component.forEach((nodeId) => {
+          nodeToComponent[nodeId] = `component-${componentIndex}`;
+        });
+      });
+
+      // Add nodes only if they have direct children
+      nodesWithChildren.forEach((name) => {
+        const data = feedstockStatus[name];
+        const status = data.pr_status || "unknown";
+        const label = name;
+        const componentId = nodeToComponent[name];
+
+        g.setNode(name, {
+          label: label,
+          rx: 5,
+          ry: 5,
+          padding: 10,
+          style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+          labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+        });
+
+        if (componentId) {
+          g.setParent(name, componentId);
+        }
+      });
+
+      // Add edges from each feedstock to its immediate children
+      nodesWithChildren.forEach((name) => {
+        const data = feedstockStatus[name];
+
+        if (data.immediate_children && Array.isArray(data.immediate_children)) {
+          data.immediate_children.forEach((child) => {
+            if (feedstockStatus[child] && !mergedPackages.has(child)) {
+              if (!g.hasNode(child)) {
+                const childData = feedstockStatus[child];
+                const childStatus = childData.pr_status || "unknown";
+                const childLabel = child;
+                const componentId = nodeToComponent[child];
+
+                g.setNode(child, {
+                  label: childLabel,
+                  rx: 5,
+                  ry: 5,
+                  padding: 10,
+                  style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
+                  labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
+                });
+
+                if (componentId) {
+                  g.setParent(child, componentId);
+                }
+              }
+
+              g.setEdge(name, child, {
+                arrowheadStyle: "fill: #333;",
+                style: "stroke: #333; stroke-width: 2px;",
+              });
+            }
+          });
+        }
+      });
+
+      return g;
+    };
 
     // === BUILD DATA STRUCTURE ===
     // Create a lookup structure: nodeId -> { outgoing: [edgeIds], incoming: [edgeIds] }
@@ -711,6 +860,52 @@ function ImpactTable({ feedstockStatus, details }) {
 
     console.log("Node map:", nodeMap);
     console.log("Edge map:", edgeMap);
+
+    // === HELPER FUNCTION TO FIND ALL ANCESTORS ===
+    const findAllAncestors = (nodeId) => {
+      const ancestors = new Set();
+      const queue = [nodeId];
+      const visited = new Set([nodeId]);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        const incomingEdges = nodeMap[current]?.incoming || [];
+
+        incomingEdges.forEach(eid => {
+          const parentId = edgeMap[eid].source;
+          if (!visited.has(parentId)) {
+            visited.add(parentId);
+            ancestors.add(parentId);
+            queue.push(parentId);
+          }
+        });
+      }
+
+      return ancestors;
+    };
+
+    // === HELPER FUNCTION TO FIND ALL DESCENDANTS ===
+    const findAllDescendants = (nodeId) => {
+      const descendants = new Set();
+      const queue = [nodeId];
+      const visited = new Set([nodeId]);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        const outgoingEdges = nodeMap[current]?.outgoing || [];
+
+        outgoingEdges.forEach(eid => {
+          const childId = edgeMap[eid].target;
+          if (!visited.has(childId)) {
+            visited.add(childId);
+            descendants.add(childId);
+            queue.push(childId);
+          }
+        });
+      }
+
+      return descendants;
+    };
 
     // === HELPER FUNCTION TO APPLY HIGHLIGHTING ===
     const applyHighlight = (nodeId) => {
@@ -756,6 +951,58 @@ function ImpactTable({ feedstockStatus, details }) {
             .style("stroke-width", "4px");
         }
       });
+    };
+
+    // === HELPER FUNCTION TO CREATE ZOOMED SUBGRAPH ===
+    const createZoomedGraph = (nodeId) => {
+      // Find all ancestors and descendants
+      const ancestors = findAllAncestors(nodeId);
+      const descendants = findAllDescendants(nodeId);
+      const visibleNodes = new Set([nodeId, ...ancestors, ...descendants]);
+
+      console.log("Zoomed view for:", nodeId);
+      console.log("Ancestors:", Array.from(ancestors));
+      console.log("Descendants:", Array.from(descendants));
+      console.log("Total visible nodes:", visibleNodes.size);
+
+      // Create new subgraph with only visible nodes
+      const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
+        .setGraph({
+          nodesep: 50,
+          ranksep: 100,
+          rankdir: "TB",
+        })
+        .setDefaultEdgeLabel(() => ({}));
+
+      // Add all visible nodes to the subgraph
+      visibleNodes.forEach(nodeName => {
+        const data = feedstockStatus[nodeName];
+        if (data) {
+          const status = data.pr_status || "unknown";
+          const label = nodeName;
+
+          subgraph.setNode(nodeName, {
+            label: label,
+            rx: 5,
+            ry: 5,
+            padding: 10,
+            style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+            labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+          });
+        }
+      });
+
+      // Add edges between visible nodes
+      Object.entries(edgeMap).forEach(([edgeId, edge]) => {
+        if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
+          subgraph.setEdge(edge.source, edge.target, {
+            arrowheadStyle: "fill: #333;",
+            style: "stroke: #333; stroke-width: 2px;",
+          });
+        }
+      });
+
+      return subgraph;
     };
 
     // Clear previous content
@@ -815,15 +1062,41 @@ function ImpactTable({ feedstockStatus, details }) {
       const nodeId = d3.select(this).attr("data-node-id");
 
       // Toggle selection
-      if (selectedNodeId === nodeId) {
+      if (selectedNodeId === nodeId && isZoomedView) {
+        // If clicking the same node while zoomed, go back to full view
         selectedNodeId = null;
-        applyHighlight(null);
-      } else {
-        selectedNodeId = nodeId;
-        applyHighlight(nodeId);
+        isZoomedView = false;
+        setGraph(rebuildOriginalGraph());
+        return;
       }
 
-      console.log("Selected node:", selectedNodeId);
+      if (selectedNodeId === nodeId && !isZoomedView) {
+        // If clicking the same node in normal view, zoom in
+        selectedNodeId = nodeId;
+        isZoomedView = true;
+        const zoomedGraph = createZoomedGraph(nodeId);
+        setGraph(zoomedGraph);
+      } else {
+        // New selection
+        selectedNodeId = nodeId;
+        isZoomedView = true;
+        const zoomedGraph = createZoomedGraph(nodeId);
+        setGraph(zoomedGraph);
+      }
+
+      console.log("Selected node:", selectedNodeId, "Zoomed:", isZoomedView);
+    });
+
+    // Click on background (void) to reset view
+    svg.on("click", function (event) {
+      // Check if click was on the background (SVG element itself), not on a child node
+      if (event.target === this) {
+        selectedNodeId = null;
+        isZoomedView = false;
+        setGraph(rebuildOriginalGraph());
+        applyHighlight(null);
+        console.log("Reset view");
+      }
     });
 
     // Setup zoom behavior
@@ -860,36 +1133,9 @@ function ImpactTable({ feedstockStatus, details }) {
 
   return (
     <div className={styles.impactTableContainer}>
-      <h3>Feedstock Impact Graph</h3>
-      <div className={styles.graphLegend}>
-        <div className={styles.legendItem}>
-          <span
-            className={styles.legendColor}
-            style={{ backgroundColor: "#28a745" }}
-          ></span>
-          <span>Clean (PR merged)</span>
-        </div>
-        <div className={styles.legendItem}>
-          <span
-            className={styles.legendColor}
-            style={{ backgroundColor: "#ffc107" }}
-          ></span>
-          <span>Unstable (PR has issues)</span>
-        </div>
-        <div className={styles.legendItem}>
-          <span
-            className={styles.legendColor}
-            style={{ backgroundColor: "#6c757d" }}
-          ></span>
-          <span>Unknown (status TBD)</span>
-        </div>
-        <div className={styles.legendItem}>
-          <span
-            className={styles.legendColor}
-            style={{ backgroundColor: "#e9ecef" }}
-          ></span>
-          <span>Awaiting (needs PR)</span>
-        </div>
+      <div className={styles.graphHeader}>
+        <h3>Feedstock Impact Graph</h3>
+        <span className={styles.instructions}>Click on node to zoom, click on background to reset view</span>
       </div>
       <div className={styles.graphContainer}>
         <svg ref={svgRef}></svg>

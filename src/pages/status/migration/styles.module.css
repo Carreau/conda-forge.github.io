@@ -198,6 +198,23 @@
   padding: 20px 0;
 }
 
+.graphHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.graphHeader h3 {
+  margin: 0;
+}
+
+.instructions {
+  font-size: 14px;
+  color: var(--ifm-color-emphasis-700);
+  font-style: italic;
+}
+
 .graphLegend {
   display: flex;
   flex-wrap: wrap;
