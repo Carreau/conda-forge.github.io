@@ -22,7 +22,8 @@ import {
   findAllAncestors,
   findAllDescendants,
   buildGraph,
-  applyHighlight
+  applyHighlight,
+  createZoomedGraph
 } from "./graphUtils";
 
 // GitHub GraphQL MergeStateStatus documentation
@@ -579,55 +580,6 @@ function ImpactTable({ graphDataStructure, details }) {
     const rebuildOriginalGraph = () => {
       if (!allNodeIds || allNodeIds.length === 0) return null;
       return buildInitialGraph(nodeMap, edgeMap, allNodeIds);
-    };
-
-    // === HELPER FUNCTION TO CREATE ZOOMED SUBGRAPH ===
-    const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
-      const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
-
-      // Find all ancestors and descendants using utility functions
-      const ancestors = findAllAncestors(nodeIdToZoom, graphDataStructure);
-      const descendants = findAllDescendants(nodeIdToZoom, graphDataStructure);
-      const visibleNodes = new Set([nodeIdToZoom, ...ancestors, ...descendants]);
-
-      // Create new subgraph with only visible nodes
-      const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-        .setGraph({
-          nodesep: 50,
-          ranksep: 100,
-          rankdir: "TB",
-        })
-        .setDefaultEdgeLabel(() => ({}));
-
-      // Add all visible nodes to the subgraph
-      visibleNodes.forEach(nodeName => {
-        const nodeInfo = nodeMapData[nodeName];
-        if (nodeInfo) {
-          const status = nodeInfo.data.pr_status || "unknown";
-          const label = nodeName;
-
-          subgraph.setNode(nodeName, {
-            label: label,
-            rx: 5,
-            ry: 5,
-            padding: 10,
-            style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-            labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-          });
-        }
-      });
-
-      // Add edges between visible nodes
-      Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
-        if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-          subgraph.setEdge(edge.source, edge.target, {
-            arrowheadStyle: "fill: #333;",
-            style: "stroke: #333; stroke-width: 2px;",
-          });
-        }
-      });
-
-      return subgraph;
     };
 
     // Clear previous content
