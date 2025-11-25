@@ -10,6 +10,19 @@ import { Tooltip } from "react-tooltip";
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+// GitHub GraphQL MergeStateStatus documentation
+// Reference: https://docs.github.com/en/graphql/reference/enums#mergestatestatus
+const CI_STATUS_DESCRIPTIONS = {
+  clean: "Mergeable and passing commit status.",
+  unstable: "Mergeable with non-passing commit status.",
+  behind: "The head ref is out of date.",
+  blocked: "The merge is blocked.",
+  dirty: "The merge commit cannot be cleanly created.",
+  draft: "The merge is blocked due to the pull request being a draft.",
+  has_hooks: "Mergeable with passing commit status and pre-receive hooks.",
+  unknown: "The state cannot currently be determined."
+};
+
 // { Done, In PR, Awaiting PR, Awaiting parents, Not solvable, Bot error }
 // The third value is a boolean representing the default display state on load
 // 'true' means hidden, 'false' means visible
@@ -37,6 +50,26 @@ export function measureProgress(details) {
     details["not-solvable"].length;
   const percentage = (done / (total || 1)) * 100;
   return { done, percentage, total };
+}
+
+function getStatusBadgeClass(prStatus) {
+  switch (prStatus) {
+    case "clean":
+      return "success";
+    case "unstable":
+      return "danger";
+    case "draft":
+      return "secondary";
+    case "behind":
+    case "blocked":
+    case "dirty":
+      return "warning";
+    case "has_hooks":
+      return "info";
+    case "unknown":
+    default:
+      return "secondary";
+  }
 }
 
 export default function MigrationDetails() {
@@ -137,6 +170,14 @@ export default function MigrationDetails() {
               <Graph>{name}</Graph> :
               (details && <Table details={details} />)
             }
+          </div>
+        </div>
+        <div className={`card margin-top--md`}>
+          <div className="card__header">
+            <h3>CI Status Legend</h3>
+          </div>
+          <div className="card__body">
+            <CIStatusLegend />
           </div>
         </div>
       </main>
@@ -375,6 +416,9 @@ function Row({ children }) {
   const total_children = feedstock["num_descendants"];
   const href = feedstock["pr_url"];
   const details = feedstock["pre_pr_migrator_status"];
+  const pr_status = feedstock["pr_status"];
+
+
   return (<>
     <tr>
       <td>
@@ -391,15 +435,12 @@ function Row({ children }) {
       </td>
       <td style={{ textAlign: "center" }}>{TITLES[status]}</td>
       <td style={{ textAlign: "center" }}>
-        {feedstock["pr_status"] ? (
-          <span className={`badge badge--${
-            feedstock["pr_status"] === "clean" ? "success" :
-            feedstock["pr_status"] === "unstable" ? "danger" :
-            "warning"
-          }`}>
-            {feedstock["pr_status"] === "clean" ? "passing" :
-             feedstock["pr_status"] === "unstable" ? "failing" :
-             feedstock["pr_status"]}
+        {pr_status ? (
+          <span
+            className={`badge badge--${getStatusBadgeClass(pr_status)}`}
+            title={CI_STATUS_DESCRIPTIONS[pr_status] || pr_status}
+          >
+            {pr_status}
           </span>
         ) : (
           <span>—</span>
@@ -419,6 +460,20 @@ function Row({ children }) {
       <td colSpan={5}><pre dangerouslySetInnerHTML={{ __html: details}} /></td>
     </tr>)}
   </>);
+}
+
+function CIStatusLegend() {
+  return (
+    <div className={styles.ci_status_legend}>
+      {Object.entries(CI_STATUS_DESCRIPTIONS).map(([status, description]) => (
+        <div key={status} className={styles.ci_status_item}>
+          <span className={`badge badge--${getStatusBadgeClass(status)}`}>{status}</span>
+          <span>{description}</span>
+        </div>
+      ))}
+      <a href="https://docs.github.com/en/graphql/reference/enums#mergestatestatus" target="_blank" rel="noopener noreferrer">See GitHub Docs</a>
+    </div>
+  );
 }
 
 async function checkPausedOrClosed(name) {
