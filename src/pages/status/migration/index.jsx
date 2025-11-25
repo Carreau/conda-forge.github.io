@@ -703,14 +703,14 @@ function ImpactTable({ graphDataStructure, details }) {
 
       // Highlight selected node if in zoomed view
       if (selectedNodeId === nodeId && isZoomedView) {
-        d3.select(this).selectAll("polygon, circle, ellipse, rect")
+        d3.select(this).selectAll("rect")
           .style("stroke-width", "3px")
           .style("fill", "#ADD8E6");
       }
 
       // Mark nodes in awaiting-parents with no parents with a light red background
       if (awaitingParentsNoParent.has(nodeId)) {
-        d3.select(this).selectAll("polygon, circle, ellipse, rect")
+        d3.select(this).selectAll("rect")
           .style("fill", "#ffe6e6")
           .style("stroke-dasharray", "5,5")
           .style("stroke-width", "2px");
