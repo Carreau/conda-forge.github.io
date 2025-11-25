@@ -4,6 +4,21 @@
 
 import * as dagreD3 from "dagre-d3-es";
 
+export const getPrunedFeedstockStatus = (feedstockStatus, details) => {
+  if (!feedstockStatus || !details?.done) return feedstockStatus;
+
+  const mergedPackages = new Set(details.done);
+  const pruned = {};
+
+  Object.entries(feedstockStatus).forEach(([name, data]) => {
+    if (!mergedPackages.has(name)) {
+      pruned[name] = data;
+    }
+  });
+
+  return pruned;
+};
+
 export const getStatusColor = (prStatus) => {
   switch (prStatus) {
     case "clean":
