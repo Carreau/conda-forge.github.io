@@ -5,6 +5,34 @@
 import * as dagreD3 from "dagre-d3-es";
 import * as d3 from "d3";
 
+// Constants for graph styling
+const DEFAULT_GRAPH_SETTINGS = {
+  nodesep: 50,
+  ranksep: 100,
+  rankdir: "TB",
+};
+
+const EDGE_STYLE = {
+  arrowheadStyle: "fill: #333;",
+  style: "stroke: #333; stroke-width: 2px;",
+};
+
+// Helper function to create node styling
+const createNodeStyle = (nodeName, status) => ({
+  label: nodeName,
+  rx: 5,
+  ry: 5,
+  padding: 10,
+  style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+  labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+});
+
+// Helper function to extract node ID from SVG element
+export const getNodeIdFromSvgElement = (element) => {
+  const fullText = d3.select(element).select("text").text().split("\n")[0];
+  return fullText.split("(")[0].trim();
+};
+
 export const getPrunedFeedstockStatus = (feedstockStatus, details) => {
   if (!feedstockStatus || !details?.done) return feedstockStatus;
 
@@ -205,10 +233,6 @@ export const buildGraphDataStructure = (feedstockStatus) => {
 export const buildInitialGraph = (graphDataStructure) => {
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
-  if (!allNodeIds || allNodeIds.length === 0) {
-    return null;
-  }
-
   // Identify nodes that have direct children using nodeMap
   const nodesWithChildren = new Set();
   allNodeIds.forEach(nodeId => {
@@ -272,7 +296,7 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
 };
 
 export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
-  const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
+  const { nodeMap, edgeMap } = graphDataStructure;
 
   // Find all ancestors and descendants using utility functions
   const ancestors = findAllAncestors(nodeIdToZoom, graphDataStructure);
@@ -281,38 +305,22 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
 
   // Create new subgraph with only visible nodes
   const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-    .setGraph({
-      nodesep: 50,
-      ranksep: 100,
-      rankdir: "TB",
-    })
+    .setGraph(DEFAULT_GRAPH_SETTINGS)
     .setDefaultEdgeLabel(() => ({}));
 
   // Add all visible nodes to the subgraph
   visibleNodes.forEach(nodeName => {
-    const nodeInfo = nodeMapData[nodeName];
+    const nodeInfo = nodeMap[nodeName];
     if (nodeInfo) {
       const status = nodeInfo.data.pr_status || "unknown";
-      const label = nodeName;
-
-      subgraph.setNode(nodeName, {
-        label: label,
-        rx: 5,
-        ry: 5,
-        padding: 10,
-        style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-        labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-      });
+      subgraph.setNode(nodeName, createNodeStyle(nodeName, status));
     }
   });
 
   // Add edges between visible nodes
-  Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
+  Object.entries(edgeMap).forEach(([edgeId, edge]) => {
     if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-      subgraph.setEdge(edge.source, edge.target, {
-        arrowheadStyle: "fill: #333;",
-        style: "stroke: #333; stroke-width: 2px;",
-      });
+      subgraph.setEdge(edge.source, edge.target, EDGE_STYLE);
     }
   });
 
@@ -321,11 +329,7 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
 
 export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
   const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-    .setGraph({
-      nodesep: 50,
-      ranksep: 100,
-      rankdir: "TB",
-    })
+    .setGraph(DEFAULT_GRAPH_SETTINGS)
     .setDefaultEdgeLabel(() => ({}));
 
   // Add compound nodes (subgraphs) for each component
@@ -353,17 +357,9 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
 
     const data = nodeInfo.data;
     const status = data.pr_status || "unknown";
-    const label = name;
     const componentId = nodeToComponent[name];
 
-    g.setNode(name, {
-      label: label,
-      rx: 5,
-      ry: 5,
-      padding: 10,
-      style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-      labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-    });
+    g.setNode(name, createNodeStyle(name, status));
 
     if (componentId) {
       g.setParent(name, componentId);
@@ -386,17 +382,9 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
         // Add the child node if not already added
         const childData = childNodeInfo.data;
         const childStatus = childData.pr_status || "unknown";
-        const childLabel = childId;
         const componentId = nodeToComponent[childId];
 
-        g.setNode(childId, {
-          label: childLabel,
-          rx: 5,
-          ry: 5,
-          padding: 10,
-          style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
-          labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
-        });
+        g.setNode(childId, createNodeStyle(childId, childStatus));
 
         if (componentId) {
           g.setParent(childId, componentId);
@@ -406,10 +394,7 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
       }
 
       // Add edge
-      g.setEdge(name, childId, {
-        arrowheadStyle: "fill: #333;",
-        style: "stroke: #333; stroke-width: 2px;",
-      });
+      g.setEdge(name, childId, EDGE_STYLE);
     });
   });
 

@@ -23,7 +23,8 @@ import {
   findAllDescendants,
   buildGraph,
   applyHighlight,
-  createZoomedGraph
+  createZoomedGraph,
+  getNodeIdFromSvgElement
 } from "./graphUtils";
 
 // GitHub GraphQL MergeStateStatus documentation
@@ -568,11 +569,6 @@ function ImpactTable({ graphDataStructure, details }) {
   useEffect(() => {
     if (!graph || !svgRef.current) return;
 
-    // === HELPER FUNCTION TO REBUILD GRAPH ===
-    const rebuildOriginalGraph = () => {
-      return buildInitialGraph(graphDataStructure);
-    };
-
     // Clear previous content
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -589,8 +585,7 @@ function ImpactTable({ graphDataStructure, details }) {
     // === ASSOCIATE SVG ELEMENTS WITH DATA ===
     // Add data attributes to SVG elements so we can find them later
     svgGroup.selectAll("g.node").each(function () {
-      const fullText = d3.select(this).select("text").text().split("\n")[0];
-      const nodeId = fullText.split("(")[0].trim();
+      const nodeId = getNodeIdFromSvgElement(this);
       d3.select(this).attr("data-node-id", nodeId);
 
       // Highlight selected node
@@ -648,7 +643,7 @@ function ImpactTable({ graphDataStructure, details }) {
       if (selectedNodeId === nodeId && selectedNodeId !== null) {
         // If clicking the same node while zoomed, go back to full view
         setSelectedNodeId(null);
-        setGraph(rebuildOriginalGraph());
+        setGraph(buildInitialGraph(graphDataStructure));
         return;
       }
 
@@ -663,7 +658,7 @@ function ImpactTable({ graphDataStructure, details }) {
       // Check if click was on the background (SVG element itself), not on a child node
       if (event.target === this) {
         setSelectedNodeId(null);
-        setGraph(rebuildOriginalGraph());
+        setGraph(buildInitialGraph(graphDataStructure));
         applyHighlight(svgGroup, null, graphDataStructure);
       }
     });
@@ -787,7 +782,6 @@ function ImpactTable({ graphDataStructure, details }) {
       </div>
       <div className={styles.graphInfo}>
         <p>
-          Node labels show package name and number of downstream dependencies.
           Arrows point from package to its immediate children (dependents).
           Use mouse wheel to zoom and drag to pan.
         </p>
