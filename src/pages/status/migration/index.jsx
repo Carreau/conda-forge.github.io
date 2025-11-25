@@ -624,7 +624,7 @@ function ImpactTable({ feedstockStatus, details }) {
     nodesWithChildren.forEach((name) => {
       const data = feedstockStatus[name];
       const status = data.pr_status || "unknown";
-      const label = `${name}\n(${data.num_descendants} deps)`;
+      const label = name;
       const componentId = nodeToComponent[name];
 
       g.setNode(name, {
@@ -652,7 +652,7 @@ function ImpactTable({ feedstockStatus, details }) {
             if (!g.hasNode(child)) {
               const childData = feedstockStatus[child];
               const childStatus = childData.pr_status || "unknown";
-              const childLabel = `${child}\n(${childData.num_descendants} deps)`;
+              const childLabel = child;
               const componentId = nodeToComponent[child];
 
               g.setNode(child, {
@@ -783,6 +783,8 @@ function ImpactTable({ feedstockStatus, details }) {
         const label = name;
         const componentId = nodeToComponent[name];
 
+        console.log("Adding node:", name, "label:", label);
+
         g.setNode(name, {
           label: label,
           rx: 5,
@@ -809,6 +811,8 @@ function ImpactTable({ feedstockStatus, details }) {
                 const childStatus = childData.pr_status || "unknown";
                 const childLabel = child;
                 const componentId = nodeToComponent[child];
+
+                console.log("Adding child node:", child, "label:", childLabel);
 
                 g.setNode(child, {
                   label: childLabel,
@@ -980,6 +984,8 @@ function ImpactTable({ feedstockStatus, details }) {
         if (data) {
           const status = data.pr_status || "unknown";
           const label = nodeName;
+
+          console.log("Adding zoomed node:", nodeName, "label:", label);
 
           subgraph.setNode(nodeName, {
             label: label,
