@@ -505,6 +505,27 @@ function ImpactTable({ feedstockStatus, details }) {
   const svgRef = React.useRef();
   const [selectedNodeId, setSelectedNodeId] = React.useState(null);
   const [isZoomedView, setIsZoomedView] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [showDropdown, setShowDropdown] = React.useState(false);
+
+  // Get all available node names from feedstockStatus
+  const allNodeNames = React.useMemo(() => {
+    if (!feedstockStatus) return [];
+    return Object.keys(feedstockStatus)
+      .filter(name => {
+        const data = feedstockStatus[name];
+        return data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0;
+      })
+      .sort();
+  }, [feedstockStatus]);
+
+  // Filter nodes based on search term
+  const filteredNodes = React.useMemo(() => {
+    if (!searchTerm) return [];
+    return allNodeNames.filter(name =>
+      name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [searchTerm, allNodeNames]);
 
   const getStatusColor = (prStatus) => {
     switch (prStatus) {
@@ -1136,10 +1157,206 @@ function ImpactTable({ feedstockStatus, details }) {
     );
   }, [graph, selectedNodeId, isZoomedView]);
 
+  // Handle zoom when node is selected from dropdown
+  useEffect(() => {
+    if (selectedNodeId && isZoomedView && graph && feedstockStatus) {
+      // Need to access the helper functions to create zoomed graph
+      // We'll trigger the graph update which will cause re-render
+      const createZoomedGraphHelper = () => {
+        const mergedPackages = new Set(details?.done || []);
+        const nodeMap = {};
+        const edgeMap = {};
+
+        // Only initialize nodes that are not merged
+        Object.entries(feedstockStatus).forEach(([nodeId, data]) => {
+          if (!mergedPackages.has(nodeId)) {
+            nodeMap[nodeId] = { incoming: [], outgoing: [] };
+          }
+        });
+
+        Object.entries(feedstockStatus).forEach(([nodeId, data]) => {
+          if (mergedPackages.has(nodeId)) return; // Skip merged packages
+          if (data.immediate_children && Array.isArray(data.immediate_children)) {
+            data.immediate_children.forEach((childId) => {
+              if (feedstockStatus[childId] && !mergedPackages.has(childId)) {
+                const edgeId = `${nodeId}->${childId}`;
+                edgeMap[edgeId] = { source: nodeId, target: childId };
+                nodeMap[nodeId].outgoing.push(edgeId);
+                nodeMap[childId].incoming.push(edgeId);
+              }
+            });
+          }
+        });
+
+        const findAllAncestors = (nodeId) => {
+          const ancestors = new Set();
+          const queue = [];
+          const incomingEdges = nodeMap[nodeId]?.incoming || [];
+
+          incomingEdges.forEach(eid => {
+            const parentId = edgeMap[eid].source;
+            if (!ancestors.has(parentId)) {
+              ancestors.add(parentId);
+              queue.push(parentId);
+            }
+          });
+
+          while (queue.length > 0) {
+            const current = queue.shift();
+            const parentEdges = nodeMap[current]?.incoming || [];
+
+            parentEdges.forEach(eid => {
+              const parentId = edgeMap[eid].source;
+              if (!ancestors.has(parentId)) {
+                ancestors.add(parentId);
+                queue.push(parentId);
+              }
+            });
+          }
+
+          return ancestors;
+        };
+
+        const findAllDescendants = (nodeId) => {
+          const descendants = new Set();
+          const queue = [nodeId];
+          const visited = new Set([nodeId]);
+
+          while (queue.length > 0) {
+            const current = queue.shift();
+            const outgoingEdges = nodeMap[current]?.outgoing || [];
+
+            outgoingEdges.forEach(eid => {
+              const childId = edgeMap[eid].target;
+              if (!visited.has(childId)) {
+                visited.add(childId);
+                descendants.add(childId);
+                queue.push(childId);
+              }
+            });
+          }
+
+          return descendants;
+        };
+
+        const ancestors = findAllAncestors(selectedNodeId);
+        const descendants = findAllDescendants(selectedNodeId);
+        const visibleNodes = new Set([selectedNodeId, ...ancestors, ...descendants]);
+
+        const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
+          .setGraph({
+            nodesep: 50,
+            ranksep: 100,
+            rankdir: "TB",
+          })
+          .setDefaultEdgeLabel(() => ({}));
+
+        visibleNodes.forEach(nodeName => {
+          const data = feedstockStatus[nodeName];
+          if (data) {
+            const status = data.pr_status || "unknown";
+            const label = nodeName;
+
+            subgraph.setNode(nodeName, {
+              label: label,
+              rx: 5,
+              ry: 5,
+              padding: 10,
+              style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+              labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+            });
+          }
+        });
+
+        Object.entries(edgeMap).forEach(([edgeId, edge]) => {
+          if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
+            subgraph.setEdge(edge.source, edge.target, {
+              arrowheadStyle: "fill: #333;",
+              style: "stroke: #333; stroke-width: 2px;",
+            });
+          }
+        });
+
+        return subgraph;
+      };
+
+      setGraph(createZoomedGraphHelper());
+    }
+  }, [selectedNodeId, isZoomedView, feedstockStatus, details]);
+
+  const handleSelectNode = (nodeName) => {
+    setSelectedNodeId(nodeName);
+    setIsZoomedView(true);
+    setSearchTerm("");
+    setShowDropdown(false);
+    // Trigger a click simulation on the node by updating graph
+    // This will be handled by the effect that watches selectedNodeId and isZoomedView
+  };
+
   return (
     <div className={styles.impactTableContainer}>
       <div className={styles.graphHeader}>
-        <h3>Feedstock Impact Graph</h3>
+        <div style={{ position: "relative" }}>
+          <h3>Feedstock Impact Graph</h3>
+          <div style={{ position: "relative", width: "300px" }}>
+            <input
+              type="text"
+              placeholder="Search for package..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+              style={{
+                padding: "8px 12px",
+                fontSize: "14px",
+                borderRadius: "4px",
+                border: "1px solid var(--ifm-color-emphasis-300)",
+                marginTop: "8px",
+                width: "100%",
+                boxSizing: "border-box"
+              }}
+            />
+            {showDropdown && filteredNodes.length > 0 && (
+              <ul
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  border: "1px solid var(--ifm-color-emphasis-300)",
+                  borderTop: "none",
+                  borderRadius: "0 0 4px 4px",
+                  backgroundColor: "var(--ifm-color-emphasis-0)",
+                  listStyle: "none",
+                  margin: 0,
+                  padding: "8px 0",
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  zIndex: 1000
+                }}
+              >
+                {filteredNodes.slice(0, 10).map((nodeName) => (
+                  <li
+                    key={nodeName}
+                    onClick={() => handleSelectNode(nodeName)}
+                    style={{
+                      padding: "8px 12px",
+                      cursor: "pointer",
+                      hover: { backgroundColor: "var(--ifm-color-emphasis-100)" }
+                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = "var(--ifm-color-emphasis-100)"}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
+                  >
+                    {nodeName}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
         <span className={styles.instructions}>Click on node to zoom, click on background to reset view</span>
       </div>
       <div className={styles.graphContainer}>
