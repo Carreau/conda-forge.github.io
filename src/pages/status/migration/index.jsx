@@ -597,8 +597,8 @@ function ImpactTable({ graphDataStructure, details }) {
     // === ASSOCIATE SVG ELEMENTS WITH DATA ===
     // Add data attributes to SVG elements so we can find them later
     svgGroup.selectAll("g.node").each(function () {
-      const fullText = d3.select(this).select("text");
-      const nodeId = fullText;
+      const fullText = d3.select(this).select("text").text().split("\n")[0];
+      const nodeId = fullText.split("(")[0].trim();
       d3.select(this).attr("data-node-id", nodeId);
 
       // Highlight selected node
