@@ -547,7 +547,6 @@ function ImpactTable({ graphDataStructure, details }) {
   const [showDropdown, setShowDropdown] = React.useState(false);
 
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
-  const isZoomedView = selectedNodeId !== null;
 
   // Build dagre graph for rendering from data structure
   useEffect(() => {
@@ -602,8 +601,8 @@ function ImpactTable({ graphDataStructure, details }) {
       const nodeId = fullText;
       d3.select(this).attr("data-node-id", nodeId);
 
-      // Highlight selected node if in zoomed view
-      if (selectedNodeId === nodeId && isZoomedView) {
+      // Highlight selected node
+      if (selectedNodeId === nodeId) {
         d3.select(this).selectAll("rect")
           .style("stroke-width", "3px")
           .style("fill", "#ADD8E6");
@@ -707,11 +706,11 @@ function ImpactTable({ graphDataStructure, details }) {
         .translate(initialTranslate[0], initialTranslate[1])
         .scale(initialScale)
     );
-  }, [graph, selectedNodeId, isZoomedView, awaitingParentsNoParent]);
+  }, [graph, selectedNodeId, awaitingParentsNoParent]);
 
   // Handle zoom when node is selected from dropdown
   useEffect(() => {
-    if (selectedNodeId && isZoomedView && allNodeIds.length > 0) {
+    if (selectedNodeId && allNodeIds.length > 0) {
       // Use utility functions to find ancestors and descendants from data structure
       const ancestors = findAllAncestors(selectedNodeId, graphDataStructure);
       const descendants = findAllDescendants(selectedNodeId, graphDataStructure);
