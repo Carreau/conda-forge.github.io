@@ -295,7 +295,8 @@ function Table({ details }) {
         <thead>
           <tr>
             <th style={{ width: 200 }}>Name</th>
-            <th style={{ width: 115 }}>Status</th>
+            <th style={{ width: 115 }}>Migration Status</th>
+            <th style={{ width: 115 }}>CI Status</th>
             <th style={{ width: 115 }}>Total number of children</th>
             <th style={{ flex: 1 }}>Immediate children</th>
           </tr>
@@ -332,6 +333,21 @@ function Row({ children }) {
       )}
       </td>
       <td style={{ textAlign: "center" }}>{TITLES[status]}</td>
+      <td style={{ textAlign: "center" }}>
+        {feedstock["pr_status"] ? (
+          <span className={`badge badge--${
+            feedstock["pr_status"] === "clean" ? "success" :
+            feedstock["pr_status"] === "unstable" ? "danger" :
+            "warning"
+          }`}>
+            {feedstock["pr_status"] === "clean" ? "passing" :
+             feedstock["pr_status"] === "unstable" ? "failing" :
+             feedstock["pr_status"]}
+          </span>
+        ) : (
+          <span>—</span>
+        )}
+      </td>
       <td style={{ textAlign: "center" }}>{total_children || null}</td>
       <td>
         {immediate_children.map((name, index) => (<React.Fragment key={index}>
@@ -343,7 +359,7 @@ function Row({ children }) {
       </td>
     </tr>
     {details && !collapsed && (<tr>
-      <td colSpan={4}><pre dangerouslySetInnerHTML={{ __html: details}} /></td>
+      <td colSpan={5}><pre dangerouslySetInnerHTML={{ __html: details}} /></td>
     </tr>)}
   </>);
 }
