@@ -3,6 +3,7 @@
  */
 
 import * as dagreD3 from "dagre-d3-es";
+import * as d3 from "d3";
 
 export const getPrunedFeedstockStatus = (feedstockStatus, details) => {
   if (!feedstockStatus || !details?.done) return feedstockStatus;
@@ -72,7 +73,8 @@ export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
   return noParents;
 };
 
-export const findAllAncestors = (nodeId, nodeMap, edgeMap) => {
+export const findAllAncestors = (nodeId, graphDataStructure) => {
+  const { nodeMap, edgeMap } = graphDataStructure;
   const ancestors = new Set();
   const queue = [nodeId];
   const visited = new Set([nodeId]);
@@ -94,7 +96,8 @@ export const findAllAncestors = (nodeId, nodeMap, edgeMap) => {
   return ancestors;
 };
 
-export const findAllDescendants = (nodeId, nodeMap, edgeMap) => {
+export const findAllDescendants = (nodeId, graphDataStructure) => {
+  const { nodeMap, edgeMap } = graphDataStructure;
   const descendants = new Set();
   const queue = [nodeId];
   const visited = new Set([nodeId]);
@@ -217,6 +220,51 @@ export const buildInitialGraph = (nodeMap, edgeMap, allNodeIds) => {
 
   // Build and return the graph using the data structure
   return buildGraph(nodeMap, edgeMap, components, nodesWithChildren);
+};
+
+export const applyHighlight = (svgGroup, nodeId, nodeMap, edgeMap) => {
+  if (!nodeId) {
+    // Clear all highlights
+    svgGroup.selectAll("g.node").style("opacity", 1);
+    svgGroup.selectAll("g.edgePath").style("opacity", 1);
+    svgGroup.selectAll("g.edgePath path")
+      .style("stroke", "#333")
+      .style("stroke-width", "2px");
+    return;
+  }
+
+  // Get related nodes and edges from our data structure
+  const outgoingEdgeIds = nodeMap[nodeId]?.outgoing || [];
+  const incomingEdgeIds = nodeMap[nodeId]?.incoming || [];
+  const allRelatedEdgeIds = [...outgoingEdgeIds, ...incomingEdgeIds];
+
+  const childNodeIds = outgoingEdgeIds.map(eid => edgeMap[eid].target);
+  const parentNodeIds = incomingEdgeIds.map(eid => edgeMap[eid].source);
+  const highlightNodeIds = new Set([nodeId, ...childNodeIds, ...parentNodeIds]);
+
+  // Dim all nodes
+  svgGroup.selectAll("g.node").style("opacity", function () {
+    const nid = d3.select(this).attr("data-node-id");
+    return highlightNodeIds.has(nid) ? 1 : 0.2;
+  });
+
+  // Dim all edges
+  svgGroup.selectAll("g.edgePath").style("opacity", 0.05);
+
+  // Highlight related edges (both incoming and outgoing)
+  svgGroup.selectAll("g.edgePath").each(function () {
+    const eid = d3.select(this).attr("data-edge-id");
+    if (allRelatedEdgeIds.includes(eid)) {
+      // Move to front
+      this.parentNode.appendChild(this);
+
+      d3.select(this)
+        .style("opacity", 1)
+        .selectAll("path")
+        .style("stroke", "#FF6B35")
+        .style("stroke-width", "4px");
+    }
+  });
 };
 
 export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {

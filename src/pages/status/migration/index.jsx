@@ -21,7 +21,8 @@ import {
   getAwaitingParentsWithNoParent,
   findAllAncestors,
   findAllDescendants,
-  buildGraph
+  buildGraph,
+  applyHighlight
 } from "./graphUtils";
 
 // GitHub GraphQL MergeStateStatus documentation
@@ -580,59 +581,14 @@ function ImpactTable({ graphDataStructure, details }) {
       return buildInitialGraph(nodeMap, edgeMap, allNodeIds);
     };
 
-
-    // === HELPER FUNCTION TO APPLY HIGHLIGHTING ===
-    const applyHighlight = (nodeId) => {
-      if (!nodeId) {
-        // Clear all highlights
-        svgGroup.selectAll("g.node").style("opacity", 1);
-        svgGroup.selectAll("g.edgePath").style("opacity", 1);
-        svgGroup.selectAll("g.edgePath path")
-          .style("stroke", "#333")
-          .style("stroke-width", "2px");
-        return;
-      }
-
-      // Get related nodes and edges from our data structure
-      const outgoingEdgeIds = nodeMap[nodeId]?.outgoing || [];
-      const incomingEdgeIds = nodeMap[nodeId]?.incoming || [];
-      const allRelatedEdgeIds = [...outgoingEdgeIds, ...incomingEdgeIds];
-
-      const childNodeIds = outgoingEdgeIds.map(eid => edgeMap[eid].target);
-      const parentNodeIds = incomingEdgeIds.map(eid => edgeMap[eid].source);
-      const highlightNodeIds = new Set([nodeId, ...childNodeIds, ...parentNodeIds]);
-
-      // Dim all nodes
-      svgGroup.selectAll("g.node").style("opacity", function () {
-        const nid = d3.select(this).attr("data-node-id");
-        return highlightNodeIds.has(nid) ? 1 : 0.2;
-      });
-
-      // Dim all edges
-      svgGroup.selectAll("g.edgePath").style("opacity", 0.05);
-
-      // Highlight related edges (both incoming and outgoing)
-      svgGroup.selectAll("g.edgePath").each(function () {
-        const eid = d3.select(this).attr("data-edge-id");
-        if (allRelatedEdgeIds.includes(eid)) {
-          // Move to front
-          this.parentNode.appendChild(this);
-
-          d3.select(this)
-            .style("opacity", 1)
-            .selectAll("path")
-            .style("stroke", "#FF6B35")
-            .style("stroke-width", "4px");
-        }
-      });
-    };
-
     // === HELPER FUNCTION TO CREATE ZOOMED SUBGRAPH ===
-    const createZoomedGraph = (nodeId) => {
+    const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
+      const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
+
       // Find all ancestors and descendants using utility functions
-      const ancestors = findAllAncestors(nodeId, nodeMap, edgeMap);
-      const descendants = findAllDescendants(nodeId, nodeMap, edgeMap);
-      const visibleNodes = new Set([nodeId, ...ancestors, ...descendants]);
+      const ancestors = findAllAncestors(nodeIdToZoom, graphDataStructure);
+      const descendants = findAllDescendants(nodeIdToZoom, graphDataStructure);
+      const visibleNodes = new Set([nodeIdToZoom, ...ancestors, ...descendants]);
 
       // Create new subgraph with only visible nodes
       const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
@@ -645,7 +601,7 @@ function ImpactTable({ graphDataStructure, details }) {
 
       // Add all visible nodes to the subgraph
       visibleNodes.forEach(nodeName => {
-        const nodeInfo = nodeMap[nodeName];
+        const nodeInfo = nodeMapData[nodeName];
         if (nodeInfo) {
           const status = nodeInfo.data.pr_status || "unknown";
           const label = nodeName;
@@ -662,7 +618,7 @@ function ImpactTable({ graphDataStructure, details }) {
       });
 
       // Add edges between visible nodes
-      Object.entries(edgeMap).forEach(([edgeId, edge]) => {
+      Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
         if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
           subgraph.setEdge(edge.source, edge.target, {
             arrowheadStyle: "fill: #333;",
@@ -731,14 +687,14 @@ function ImpactTable({ graphDataStructure, details }) {
       // Only apply hover highlight if no node is selected
       if (!selectedNodeId) {
         const nodeId = d3.select(this).attr("data-node-id");
-        applyHighlight(nodeId);
+        applyHighlight(svgGroup, nodeId, nodeMap, edgeMap);
       }
     });
 
     svgGroup.selectAll("g.node").on("mouseleave", function () {
       // Only reset if no node is selected
       if (!selectedNodeId) {
-        applyHighlight(null);
+        applyHighlight(svgGroup, null, nodeMap, edgeMap);
       }
     });
 
@@ -758,13 +714,13 @@ function ImpactTable({ graphDataStructure, details }) {
         // If clicking the same node in normal view, zoom in
         setSelectedNodeId(nodeId);
         setIsZoomedView(true);
-        const zoomedGraph = createZoomedGraph(nodeId);
+        const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
         setGraph(zoomedGraph);
       } else {
         // New selection
         setSelectedNodeId(nodeId);
         setIsZoomedView(true);
-        const zoomedGraph = createZoomedGraph(nodeId);
+        const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
         setGraph(zoomedGraph);
       }
     });
@@ -776,7 +732,7 @@ function ImpactTable({ graphDataStructure, details }) {
         setSelectedNodeId(null);
         setIsZoomedView(false);
         setGraph(rebuildOriginalGraph());
-        applyHighlight(null);
+        applyHighlight(svgGroup, null, nodeMap, edgeMap);
       }
     });
 
@@ -816,8 +772,8 @@ function ImpactTable({ graphDataStructure, details }) {
   useEffect(() => {
     if (selectedNodeId && isZoomedView && allNodeIds.length > 0) {
       // Use utility functions to find ancestors and descendants from data structure
-      const ancestors = findAllAncestors(selectedNodeId, nodeMap, edgeMap);
-      const descendants = findAllDescendants(selectedNodeId, nodeMap, edgeMap);
+      const ancestors = findAllAncestors(selectedNodeId, graphDataStructure);
+      const descendants = findAllDescendants(selectedNodeId, graphDataStructure);
       const visibleNodes = new Set([selectedNodeId, ...ancestors, ...descendants]);
 
       // Create subgraph with visible nodes only
