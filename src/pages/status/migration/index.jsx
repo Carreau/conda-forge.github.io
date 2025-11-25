@@ -274,30 +274,87 @@ function Graph(props) {
 
 function Table({ details }) {
   const defaultFilters = ORDERED.reduce((filters, [status, _, toggled]) => ({ ...filters, [status]: toggled }), {});
-  const [filters, setState] = useState(defaultFilters);
+  const [filters, setFilters] = useState(defaultFilters);
+  const [sortConfig, setSortConfig] = useState({ key: "num_descendants", direction: "desc" });
   const feedstock = details._feedstock_status;
-  const rows = ORDERED.reduce((rows, [status]) => (
-    filters[status] ? rows :
-      rows.concat((details[status]).map(name => ([name, status])))
-  ), []).sort((a, b) => (
-    feedstock[b[0]]["num_descendants"] - feedstock[a[0]]["num_descendants"]
-    || ORDERED.findIndex(x => x[0] == a[1]) - ORDERED.findIndex(x => x[0] == b[1])
-    || a[0].localeCompare(b[0]))
+
+  const getFilteredRows = () => {
+    return ORDERED.reduce((rows, [status]) => (
+      filters[status] ? rows :
+        rows.concat((details[status]).map(name => ([name, status])))
+    ), []);
+  };
+
+  const getSortedRows = (rowsToSort) => {
+    const sorted = [...rowsToSort];
+    sorted.sort((a, b) => {
+      const [nameA, statusA] = a;
+      const [nameB, statusB] = b;
+      const feedstockA = feedstock[nameA];
+      const feedstockB = feedstock[nameB];
+
+      let compareValue = 0;
+
+      switch (sortConfig.key) {
+        case "name":
+          compareValue = nameA.localeCompare(nameB);
+          break;
+        case "migration_status":
+          compareValue = ORDERED.findIndex(x => x[0] == statusA) - ORDERED.findIndex(x => x[0] == statusB);
+          break;
+        case "ci_status":
+          const statusOrder = { clean: 0, unknown: 1, unstable: 2, "": 3 };
+          const statusValA = feedstockA["pr_status"] || "";
+          const statusValB = feedstockB["pr_status"] || "";
+          compareValue = (statusOrder[statusValA] || 3) - (statusOrder[statusValB] || 3);
+          break;
+        case "num_descendants":
+          compareValue = feedstockA["num_descendants"] - feedstockB["num_descendants"];
+          break;
+        default:
+          compareValue = 0;
+      }
+
+      return sortConfig.direction === "asc" ? compareValue : -compareValue;
+    });
+    return sorted;
+  };
+
+  const rows = getSortedRows(getFilteredRows());
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === "desc" ? "asc" : "desc"
+    }));
+  };
+
+  const SortHeader = ({ column, label }) => (
+    <th
+      style={{ width: column === "num_descendants" ? 115 : (column === "name" ? 200 : 115), cursor: "pointer", userSelect: "none" }}
+      onClick={() => handleSort(column)}
+    >
+      {label}
+      <span style={{ marginLeft: "0.5em", opacity: sortConfig.key === column ? 1 : 0.4 }}>
+        {sortConfig.key === column ? (sortConfig.direction === "desc" ? "▼" : "▲") : "⬍"}
+      </span>
+    </th>
   );
+
   return (
     <>
       <Filters
         counts={ORDERED.reduce((counts, [key]) =>
           ({ ...counts, [key]: 0 || details[key]?.length }), {})}
         filters={{ ...filters }}
-        onFilter={key => setState(prev => ({ ...prev, [key]: !prev[key] }))} />
+        onFilter={key => setFilters(prev => ({ ...prev, [key]: !prev[key] }))} />
       {rows.length > 0 && <table>
         <thead>
           <tr>
-            <th style={{ width: 200 }}>Name</th>
-            <th style={{ width: 115 }}>Migration Status</th>
-            <th style={{ width: 115 }}>CI Status</th>
-            <th style={{ width: 115 }}>Total number of children</th>
+            <SortHeader column="name" label="Name" />
+            <SortHeader column="migration_status" label="Migration Status" />
+            <SortHeader column="ci_status" label="CI Status" />
+            <SortHeader column="num_descendants" label="Total number of children" />
             <th style={{ flex: 1 }}>Immediate children</th>
           </tr>
         </thead>
