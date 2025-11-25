@@ -551,7 +551,7 @@ function ImpactTable({ feedstockStatus, details }) {
       .setGraph({
         nodesep: 50,
         ranksep: 100,
-        rankdir: "LR", // Left to right layout
+        rankdir: "TB", // Top to bottom layout (horizontal flow)
       })
       .setDefaultEdgeLabel(() => ({}));
 
