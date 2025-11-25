@@ -9,6 +9,8 @@ import styles from "./styles.module.css";
 import { Tooltip } from "react-tooltip";
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+import * as dagreD3 from "dagre-d3-es";
+import * as d3 from "d3";
 
 // GitHub GraphQL MergeStateStatus documentation
 // Reference: https://docs.github.com/en/graphql/reference/enums#mergestatestatus
@@ -143,6 +145,14 @@ export default function MigrationDetails() {
                   >
                     Graph
                   </li>
+                  <li
+                    key="impact"
+                    role="tab"
+                    class={["tabs__item", (view == "impact" ? "tabs__item--active" : null)].join(" ")}
+                    onClick={() => toggle("impact")}
+                  >
+                    Impact
+                  </li>
                   {name &&
                     <a href={urls.migrations.details.replace("<NAME>", name)} target="_blank">
                       <li
@@ -168,7 +178,9 @@ export default function MigrationDetails() {
             {details && <Bar details={details} /> || null}
             {view === "graph" ?
               <Graph>{name}</Graph> :
-              (details && <Table details={details} />)
+              view === "impact" ?
+                (details && <ImpactTable feedstockStatus={details._feedstock_status} details={details} />) :
+                (details && <Table details={details} />)
             }
           </div>
         </div>
@@ -486,4 +498,335 @@ async function checkPausedOrClosed(name) {
       console.warn(`error checking status for ${name}:`, error);
     }
   }
+}
+
+function ImpactTable({ feedstockStatus, details }) {
+  const [graph, setGraph] = useState(null);
+  const svgRef = React.useRef();
+
+  const getStatusColor = (prStatus) => {
+    switch (prStatus) {
+      case "clean":
+        return "#28a745"; // Green
+      case "unstable":
+        return "#ffc107"; // Yellow
+      case "unknown":
+        return "#6c757d"; // Gray
+      default:
+        return "#e9ecef"; // Light gray for awaiting
+    }
+  };
+
+  const getStatusTextColor = (prStatus) => {
+    return prStatus === "clean" ? "#ffffff" : "#000000";
+  };
+
+  useEffect(() => {
+    if (!feedstockStatus || Object.keys(feedstockStatus).length === 0) {
+      console.log("No feedstock status data available");
+      return;
+    }
+
+    // Get the set of merged packages (in "done" category)
+    const mergedPackages = new Set(details?.done || []);
+
+    // First pass: identify nodes that have direct children and aren't merged
+    const nodesWithChildren = new Set();
+    Object.entries(feedstockStatus).forEach(([name, data]) => {
+      if (mergedPackages.has(name)) {
+        return;
+      }
+
+      if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
+        // Check if at least one child is not merged
+        const hasNonMergedChild = data.immediate_children.some(child => !mergedPackages.has(child));
+        if (hasNonMergedChild) {
+          nodesWithChildren.add(name);
+        }
+      }
+    });
+
+    // Create a new directed graph
+    const g = new dagreD3.graphlib.Graph({ compound: false, directed: true })
+      .setGraph({
+        nodesep: 50,
+        ranksep: 100,
+        rankdir: "LR", // Left to right layout
+      })
+      .setDefaultEdgeLabel(() => ({}));
+
+    // Add nodes only if they have direct children
+    nodesWithChildren.forEach((name) => {
+      const data = feedstockStatus[name];
+      const status = data.pr_status || "unknown";
+      const label = `${name}\n(${data.num_descendants} deps)`;
+
+      g.setNode(name, {
+        label: label,
+        rx: 5,
+        ry: 5,
+        padding: 10,
+        style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+        labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+      });
+    });
+
+    // Add edges from each feedstock to its immediate children (only if both nodes exist)
+    nodesWithChildren.forEach((name) => {
+      const data = feedstockStatus[name];
+
+      if (data.immediate_children && Array.isArray(data.immediate_children)) {
+        data.immediate_children.forEach((child) => {
+          // Only add edge if child node exists and wasn't merged
+          if (feedstockStatus[child] && !mergedPackages.has(child)) {
+            // Add child node if it doesn't exist yet
+            if (!g.hasNode(child)) {
+              const childData = feedstockStatus[child];
+              const childStatus = childData.pr_status || "unknown";
+              const childLabel = `${child}\n(${childData.num_descendants} deps)`;
+
+              g.setNode(child, {
+                label: childLabel,
+                rx: 5,
+                ry: 5,
+                padding: 10,
+                style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
+                labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
+              });
+            }
+
+            g.setEdge(name, child, {
+              arrowheadStyle: "fill: #333;",
+              style: "stroke: #333; stroke-width: 2px;",
+            });
+          }
+        });
+      }
+    });
+
+    setGraph(g);
+  }, [feedstockStatus, details]);
+
+  useEffect(() => {
+    if (!graph || !svgRef.current) return;
+
+    // === STATE FOR PERSISTENT HIGHLIGHTING ===
+    let selectedNodeId = null;
+
+    // === BUILD DATA STRUCTURE ===
+    // Create a lookup structure: nodeId -> { outgoing: [edgeIds], incoming: [edgeIds] }
+    const nodeMap = {};
+    graph.nodes().forEach(nodeId => {
+      nodeMap[nodeId] = {
+        outgoing: [],
+        incoming: []
+      };
+    });
+
+    // Map edges: edgeId -> { source, target }
+    const edgeMap = {};
+    graph.edges().forEach(edge => {
+      const edgeId = `${edge.v}→${edge.w}`;
+      edgeMap[edgeId] = {
+        source: edge.v,
+        target: edge.w
+      };
+      nodeMap[edge.v].outgoing.push(edgeId);
+      nodeMap[edge.w].incoming.push(edgeId);
+    });
+
+    console.log("Node map:", nodeMap);
+    console.log("Edge map:", edgeMap);
+
+    // === HELPER FUNCTION TO APPLY HIGHLIGHTING ===
+    const applyHighlight = (nodeId) => {
+      if (!nodeId) {
+        // Clear all highlights
+        svgGroup.selectAll("g.node").style("opacity", 1);
+        svgGroup.selectAll("g.edgePath").style("opacity", 1);
+        svgGroup.selectAll("g.edgePath path")
+          .style("stroke", "#333")
+          .style("stroke-width", "2px");
+        return;
+      }
+
+      // Get related nodes and edges from our data structure
+      const outgoingEdgeIds = nodeMap[nodeId]?.outgoing || [];
+      const incomingEdgeIds = nodeMap[nodeId]?.incoming || [];
+      const allRelatedEdgeIds = [...outgoingEdgeIds, ...incomingEdgeIds];
+
+      const childNodeIds = outgoingEdgeIds.map(eid => edgeMap[eid].target);
+      const parentNodeIds = incomingEdgeIds.map(eid => edgeMap[eid].source);
+      const highlightNodeIds = new Set([nodeId, ...childNodeIds, ...parentNodeIds]);
+
+      // Dim all nodes
+      svgGroup.selectAll("g.node").style("opacity", function () {
+        const nid = d3.select(this).attr("data-node-id");
+        return highlightNodeIds.has(nid) ? 1 : 0.2;
+      });
+
+      // Dim all edges
+      svgGroup.selectAll("g.edgePath").style("opacity", 0.05);
+
+      // Highlight related edges (both incoming and outgoing)
+      svgGroup.selectAll("g.edgePath").each(function () {
+        const eid = d3.select(this).attr("data-edge-id");
+        if (allRelatedEdgeIds.includes(eid)) {
+          // Move to front
+          this.parentNode.appendChild(this);
+
+          d3.select(this)
+            .style("opacity", 1)
+            .selectAll("path")
+            .style("stroke", "#FF6B35")
+            .style("stroke-width", "4px");
+        }
+      });
+    };
+
+    // Clear previous content
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    // Create SVG group and set up zoom
+    const svgGroup = svg.append("g");
+
+    // Create the renderer
+    const render = new dagreD3.render();
+
+    // Run the renderer
+    render(svgGroup, graph);
+
+    // === ASSOCIATE SVG ELEMENTS WITH DATA ===
+    // Add data attributes to SVG elements so we can find them later
+    svgGroup.selectAll("g.node").each(function () {
+      const fullText = d3.select(this).select("text").text().split("\n")[0];
+      const nodeId = fullText.split("(")[0].trim();
+      d3.select(this).attr("data-node-id", nodeId);
+    });
+
+    // Add data attributes to edge elements
+    let edgeIndex = 0;
+    const edgeIdMap = {}; // Map SVG element index to edge id
+    svgGroup.selectAll("g.edgePath").each(function () {
+      // Try to match by looking at visual position or order
+      const edgeIds = Object.keys(edgeMap);
+      if (edgeIndex < edgeIds.length) {
+        const edgeId = edgeIds[edgeIndex];
+        d3.select(this).attr("data-edge-id", edgeId);
+        edgeIdMap[edgeIndex] = edgeId;
+      }
+      edgeIndex++;
+    });
+
+    // === HOVER AND CLICK HANDLERS ===
+    svgGroup.selectAll("g.node").style("cursor", "pointer");
+
+    svgGroup.selectAll("g.node").on("mouseenter", function () {
+      // Only apply hover highlight if no node is selected
+      if (!selectedNodeId) {
+        const nodeId = d3.select(this).attr("data-node-id");
+        applyHighlight(nodeId);
+      }
+    });
+
+    svgGroup.selectAll("g.node").on("mouseleave", function () {
+      // Only reset if no node is selected
+      if (!selectedNodeId) {
+        applyHighlight(null);
+      }
+    });
+
+    svgGroup.selectAll("g.node").on("click", function () {
+      const nodeId = d3.select(this).attr("data-node-id");
+
+      // Toggle selection
+      if (selectedNodeId === nodeId) {
+        selectedNodeId = null;
+        applyHighlight(null);
+      } else {
+        selectedNodeId = nodeId;
+        applyHighlight(nodeId);
+      }
+
+      console.log("Selected node:", selectedNodeId);
+    });
+
+    // Setup zoom behavior
+    const zoom = d3.zoom().on("zoom", (event) => {
+      svgGroup.attr("transform", event.transform);
+    });
+
+    svg.call(zoom);
+
+    // Center the graph initially
+    const graphWidth = graph.graph().width;
+    const graphHeight = graph.graph().height;
+    const svgWidth = svgRef.current.clientWidth;
+    const svgHeight = svgRef.current.clientHeight;
+
+    const initialScale = Math.min(
+      svgWidth / graphWidth,
+      svgHeight / graphHeight,
+      1
+    ) * 0.85;
+
+    const initialTranslate = [
+      (svgWidth - graphWidth * initialScale) / 2,
+      (svgHeight - graphHeight * initialScale) / 2,
+    ];
+
+    svg.call(
+      zoom.transform,
+      d3.zoomIdentity
+        .translate(initialTranslate[0], initialTranslate[1])
+        .scale(initialScale)
+    );
+  }, [graph]);
+
+  return (
+    <div className={styles.impactTableContainer}>
+      <h3>Feedstock Impact Graph</h3>
+      <div className={styles.graphLegend}>
+        <div className={styles.legendItem}>
+          <span
+            className={styles.legendColor}
+            style={{ backgroundColor: "#28a745" }}
+          ></span>
+          <span>Clean (PR merged)</span>
+        </div>
+        <div className={styles.legendItem}>
+          <span
+            className={styles.legendColor}
+            style={{ backgroundColor: "#ffc107" }}
+          ></span>
+          <span>Unstable (PR has issues)</span>
+        </div>
+        <div className={styles.legendItem}>
+          <span
+            className={styles.legendColor}
+            style={{ backgroundColor: "#6c757d" }}
+          ></span>
+          <span>Unknown (status TBD)</span>
+        </div>
+        <div className={styles.legendItem}>
+          <span
+            className={styles.legendColor}
+            style={{ backgroundColor: "#e9ecef" }}
+          ></span>
+          <span>Awaiting (needs PR)</span>
+        </div>
+      </div>
+      <div className={styles.graphContainer}>
+        <svg ref={svgRef}></svg>
+      </div>
+      <div className={styles.graphInfo}>
+        <p>
+          Node labels show package name and number of downstream dependencies.
+          Arrows point from package to its immediate children (dependents).
+          Use mouse wheel to zoom and drag to pan.
+        </p>
+      </div>
+    </div>
+  );
 }
