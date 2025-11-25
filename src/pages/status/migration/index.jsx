@@ -503,6 +503,8 @@ async function checkPausedOrClosed(name) {
 function ImpactTable({ feedstockStatus, details }) {
   const [graph, setGraph] = useState(null);
   const svgRef = React.useRef();
+  const [selectedNodeId, setSelectedNodeId] = React.useState(null);
+  const [isZoomedView, setIsZoomedView] = React.useState(false);
 
   const getStatusColor = (prStatus) => {
     switch (prStatus) {
@@ -684,10 +686,6 @@ function ImpactTable({ feedstockStatus, details }) {
   useEffect(() => {
     if (!graph || !svgRef.current) return;
 
-    // === STATE FOR PERSISTENT HIGHLIGHTING AND ZOOMED VIEW ===
-    let selectedNodeId = null;
-    let isZoomedView = false;
-
     // === HELPER FUNCTION TO REBUILD GRAPH FROM BACKUP ===
     const rebuildOriginalGraph = () => {
       // Get the set of merged packages (in "done" category)
@@ -783,8 +781,6 @@ function ImpactTable({ feedstockStatus, details }) {
         const label = name;
         const componentId = nodeToComponent[name];
 
-        console.log("Adding node:", name, "label:", label);
-
         g.setNode(name, {
           label: label,
           rx: 5,
@@ -811,8 +807,6 @@ function ImpactTable({ feedstockStatus, details }) {
                 const childStatus = childData.pr_status || "unknown";
                 const childLabel = child;
                 const componentId = nodeToComponent[child];
-
-                console.log("Adding child node:", child, "label:", childLabel);
 
                 g.setNode(child, {
                   label: childLabel,
@@ -985,8 +979,6 @@ function ImpactTable({ feedstockStatus, details }) {
           const status = data.pr_status || "unknown";
           const label = nodeName;
 
-          console.log("Adding zoomed node:", nodeName, "label:", label);
-
           subgraph.setNode(nodeName, {
             label: label,
             rx: 5,
@@ -1030,6 +1022,13 @@ function ImpactTable({ feedstockStatus, details }) {
       const fullText = d3.select(this).select("text").text().split("\n")[0];
       const nodeId = fullText.split("(")[0].trim();
       d3.select(this).attr("data-node-id", nodeId);
+
+      // Highlight selected node if in zoomed view
+      if (selectedNodeId === nodeId && isZoomedView) {
+        d3.select(this).selectAll("polygon, circle, ellipse, rect")
+          .style("stroke-width", "3px")
+          .style("fill", "#ADD8E6");
+      }
     });
 
     // Add data attributes to edge elements
@@ -1070,35 +1069,35 @@ function ImpactTable({ feedstockStatus, details }) {
       // Toggle selection
       if (selectedNodeId === nodeId && isZoomedView) {
         // If clicking the same node while zoomed, go back to full view
-        selectedNodeId = null;
-        isZoomedView = false;
+        setSelectedNodeId(null);
+        setIsZoomedView(false);
         setGraph(rebuildOriginalGraph());
         return;
       }
 
       if (selectedNodeId === nodeId && !isZoomedView) {
         // If clicking the same node in normal view, zoom in
-        selectedNodeId = nodeId;
-        isZoomedView = true;
+        setSelectedNodeId(nodeId);
+        setIsZoomedView(true);
         const zoomedGraph = createZoomedGraph(nodeId);
         setGraph(zoomedGraph);
       } else {
         // New selection
-        selectedNodeId = nodeId;
-        isZoomedView = true;
+        setSelectedNodeId(nodeId);
+        setIsZoomedView(true);
         const zoomedGraph = createZoomedGraph(nodeId);
         setGraph(zoomedGraph);
       }
 
-      console.log("Selected node:", selectedNodeId, "Zoomed:", isZoomedView);
+      console.log("Selected node:", nodeId, "Zoomed: true");
     });
 
     // Click on background (void) to reset view
     svg.on("click", function (event) {
       // Check if click was on the background (SVG element itself), not on a child node
       if (event.target === this) {
-        selectedNodeId = null;
-        isZoomedView = false;
+        setSelectedNodeId(null);
+        setIsZoomedView(false);
         setGraph(rebuildOriginalGraph());
         applyHighlight(null);
         console.log("Reset view");
@@ -1135,7 +1134,7 @@ function ImpactTable({ feedstockStatus, details }) {
         .translate(initialTranslate[0], initialTranslate[1])
         .scale(initialScale)
     );
-  }, [graph]);
+  }, [graph, selectedNodeId, isZoomedView]);
 
   return (
     <div className={styles.impactTableContainer}>
