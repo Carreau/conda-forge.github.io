@@ -543,11 +543,11 @@ function ImpactTable({ graphDataStructure, details }) {
   const [graph, setGraph] = useState(null);
   const svgRef = React.useRef();
   const [selectedNodeId, setSelectedNodeId] = React.useState(null);
-  const [isZoomedView, setIsZoomedView] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [showDropdown, setShowDropdown] = React.useState(false);
 
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
+  const isZoomedView = selectedNodeId !== null;
 
   // Build dagre graph for rendering from data structure
   useEffect(() => {
@@ -654,27 +654,17 @@ function ImpactTable({ graphDataStructure, details }) {
       const nodeId = d3.select(this).attr("data-node-id");
 
       // Toggle selection
-      if (selectedNodeId === nodeId && isZoomedView) {
+      if (selectedNodeId === nodeId && selectedNodeId !== null) {
         // If clicking the same node while zoomed, go back to full view
         setSelectedNodeId(null);
-        setIsZoomedView(false);
         setGraph(rebuildOriginalGraph());
         return;
       }
 
-      if (selectedNodeId === nodeId && !isZoomedView) {
-        // If clicking the same node in normal view, zoom in
-        setSelectedNodeId(nodeId);
-        setIsZoomedView(true);
-        const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
-        setGraph(zoomedGraph);
-      } else {
-        // New selection
-        setSelectedNodeId(nodeId);
-        setIsZoomedView(true);
-        const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
-        setGraph(zoomedGraph);
-      }
+      // New selection or re-selection
+      setSelectedNodeId(nodeId);
+      const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
+      setGraph(zoomedGraph);
     });
 
     // Click on background (void) to reset view
@@ -682,7 +672,6 @@ function ImpactTable({ graphDataStructure, details }) {
       // Check if click was on the background (SVG element itself), not on a child node
       if (event.target === this) {
         setSelectedNodeId(null);
-        setIsZoomedView(false);
         setGraph(rebuildOriginalGraph());
         applyHighlight(svgGroup, null, nodeMap, edgeMap);
       }
@@ -765,15 +754,14 @@ function ImpactTable({ graphDataStructure, details }) {
 
       setGraph(subgraph);
     }
-  }, [selectedNodeId, isZoomedView, allNodeIds, nodeMap, edgeMap]);
+  }, [selectedNodeId, allNodeIds, nodeMap, edgeMap]);
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
-    setIsZoomedView(true);
     setSearchTerm("");
     setShowDropdown(false);
     // Trigger a click simulation on the node by updating graph
-    // This will be handled by the effect that watches selectedNodeId and isZoomedView
+    // This will be handled by the effect that watches selectedNodeId
   };
 
   return (
