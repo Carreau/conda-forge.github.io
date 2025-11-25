@@ -463,17 +463,13 @@ function Row({ children }) {
   const details = feedstock["pre_pr_migrator_status"];
   const pr_status = feedstock["pr_status"];
 
-  // For "awaiting-parents" status, highlight packages that are NOT children of any other package in the graph
+  // For "awaiting-parents" status, mark packages that are NOT children of any other package in the graph
   // These packages are marked as awaiting parents but have no parent in the graph
-  let hasNoParentInGraph = false;
-  if (status === "awaiting-parents") {
-    // Check if this package is a child of any package in the graph
-    hasNoParentInGraph = !allChildrenInGraph.has(name);
-  }
-  const rowStyle = hasNoParentInGraph ? { backgroundColor: "#ffe6e6" } : {};
+  const hasNoParentInGraph = status === "awaiting-parents" && !allChildrenInGraph.has(name);
+  const rowClass = hasNoParentInGraph ? styles.awaiting_parents_no_parent : "";
 
   return (<>
-    <tr style={rowStyle}>
+    <tr className={rowClass}>
       <td>
       {href ? (
         <a href={href}>{name}</a>

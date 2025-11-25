@@ -138,6 +138,10 @@
   display: block;
 }
 
+.awaiting_parents_no_parent {
+  background-color: #ffe6e6;
+}
+
 .migration_details .collapsed,
 .migration_details .expanded {
   cursor: pointer;
