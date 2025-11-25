@@ -18,7 +18,10 @@ import {
   filterNodesBySearchTerm,
   getAwaitingParentsWithNoParent,
   getNodesWithChildren,
-  findConnectedComponents
+  findConnectedComponents,
+  findAllAncestors,
+  findAllDescendants,
+  buildGraph
 } from "./graphUtils";
 
 // GitHub GraphQL MergeStateStatus documentation
@@ -538,10 +541,26 @@ function ImpactTable({ feedstockStatus, details }) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [showDropdown, setShowDropdown] = React.useState(false);
 
-  // Get all available node names from feedstockStatus
+  // Prune feedstockStatus to remove merged packages once
+  const prunedFeedstockStatus = React.useMemo(() => {
+    if (!feedstockStatus || !details?.done) return feedstockStatus;
+
+    const mergedPackages = new Set(details.done);
+    const pruned = {};
+
+    Object.entries(feedstockStatus).forEach(([name, data]) => {
+      if (!mergedPackages.has(name)) {
+        pruned[name] = data;
+      }
+    });
+
+    return pruned;
+  }, [feedstockStatus, details?.done]);
+
+  // Get all available node names from prunedFeedstockStatus
   const allNodeNames = React.useMemo(() => {
-    return getNodeNamesWithChildren(feedstockStatus);
-  }, [feedstockStatus]);
+    return getNodeNamesWithChildren(prunedFeedstockStatus);
+  }, [prunedFeedstockStatus]);
 
   // Filter nodes based on search term
   const filteredNodes = React.useMemo(() => {
@@ -550,23 +569,25 @@ function ImpactTable({ feedstockStatus, details }) {
 
   // Identify nodes in "awaiting-parents" that have no parents in the graph
   const awaitingParentsNoParent = React.useMemo(() => {
-    return getAwaitingParentsWithNoParent(feedstockStatus, details);
-  }, [feedstockStatus, details]);
+    return getAwaitingParentsWithNoParent(prunedFeedstockStatus, details);
+  }, [prunedFeedstockStatus, details]);
 
   useEffect(() => {
-    if (!feedstockStatus || Object.keys(feedstockStatus).length === 0) {
+    if (!prunedFeedstockStatus || Object.keys(prunedFeedstockStatus).length === 0) {
       return;
     }
 
-    // Get the set of merged packages (in "done" category)
-    const mergedPackages = new Set(details?.done || []);
-
-    // First pass: identify nodes that have direct children and aren't merged
-    const nodesWithChildren = getNodesWithChildren(feedstockStatus, mergedPackages);
+    // First pass: identify nodes that have direct children
+    const nodesWithChildren = new Set();
+    Object.entries(prunedFeedstockStatus).forEach(([name, data]) => {
+      if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
+        nodesWithChildren.add(name);
+      }
+    });
 
     // === OPTIMIZE LAYOUT: FIND CONNECTED COMPONENTS ===
     // This helps minimize edge crossings by grouping related packages together
-    const components = findConnectedComponents(feedstockStatus, nodesWithChildren, mergedPackages);
+    const components = findConnectedComponents(prunedFeedstockStatus, nodesWithChildren);
 
     // Create graph with compound structure (subgraphs for each component)
     const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
@@ -597,7 +618,7 @@ function ImpactTable({ feedstockStatus, details }) {
 
     // Add nodes only if they have direct children
     nodesWithChildren.forEach((name) => {
-      const data = feedstockStatus[name];
+      const data = prunedFeedstockStatus[name];
       const status = data.pr_status || "unknown";
       const label = name;
       const componentId = nodeToComponent[name];
@@ -618,14 +639,14 @@ function ImpactTable({ feedstockStatus, details }) {
 
     // Add edges from each feedstock to its immediate children
     nodesWithChildren.forEach((name) => {
-      const data = feedstockStatus[name];
+      const data = prunedFeedstockStatus[name];
 
       if (data.immediate_children && Array.isArray(data.immediate_children)) {
         data.immediate_children.forEach((child) => {
-          if (feedstockStatus[child] && !mergedPackages.has(child)) {
+          if (prunedFeedstockStatus[child]) {
             // Add child node if it doesn't exist yet
             if (!g.hasNode(child)) {
-              const childData = feedstockStatus[child];
+              const childData = prunedFeedstockStatus[child];
               const childStatus = childData.pr_status || "unknown";
               const childLabel = child;
               const componentId = nodeToComponent[child];
@@ -661,150 +682,17 @@ function ImpactTable({ feedstockStatus, details }) {
 
     // === HELPER FUNCTION TO REBUILD GRAPH FROM BACKUP ===
     const rebuildOriginalGraph = () => {
-      // Get the set of merged packages (in "done" category)
-      const mergedPackages = new Set(details?.done || []);
-
-      // === OPTIMIZE LAYOUT: FIND CONNECTED COMPONENTS ===
-      const visited = new Set();
-      const components = [];
-
-      const dfs = (nodeId, component, visited) => {
-        if (visited.has(nodeId)) return;
-        visited.add(nodeId);
-        component.add(nodeId);
-
-        const data = feedstockStatus[nodeId];
-        if (data) {
-          if (data.immediate_children && Array.isArray(data.immediate_children)) {
-            data.immediate_children.forEach((child) => {
-              if (feedstockStatus[child] && !mergedPackages.has(child)) {
-                dfs(child, component, visited);
-              }
-            });
-          }
-        }
-
-        Object.entries(feedstockStatus).forEach(([potentialParent, parentData]) => {
-          if (
-            parentData.immediate_children &&
-            parentData.immediate_children.includes(nodeId) &&
-            !mergedPackages.has(potentialParent)
-          ) {
-            dfs(potentialParent, component, visited);
-          }
-        });
-      };
-
-      // First pass: identify nodes that have direct children and aren't merged
+      // Identify nodes that have direct children (using pruned data)
       const nodesWithChildren = new Set();
-      Object.entries(feedstockStatus).forEach(([name, data]) => {
-        if (mergedPackages.has(name)) {
-          return;
-        }
-
+      Object.entries(prunedFeedstockStatus).forEach(([name, data]) => {
         if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
-          const hasNonMergedChild = data.immediate_children.some(child => !mergedPackages.has(child));
-          if (hasNonMergedChild) {
-            nodesWithChildren.add(name);
-          }
+          nodesWithChildren.add(name);
         }
       });
 
-      nodesWithChildren.forEach((name) => {
-        if (!visited.has(name)) {
-          const component = new Set();
-          dfs(name, component, visited);
-          if (component.size > 0) {
-            components.push(component);
-          }
-        }
-      });
-
-      // Create graph with compound structure
-      const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-        .setGraph({
-          nodesep: 50,
-          ranksep: 100,
-          rankdir: "TB",
-        })
-        .setDefaultEdgeLabel(() => ({}));
-
-      // Add compound nodes (subgraphs) for each component
-      components.forEach((component, componentIndex) => {
-        const componentId = `component-${componentIndex}`;
-        g.setNode(componentId, {
-          label: "",
-          clusterLabelPos: "top",
-          style: "fill: none; stroke: #ccc; stroke-width: 1px; stroke-dasharray: 5,5;",
-        });
-      });
-
-      // Add nodes to their components
-      const nodeToComponent = {};
-      components.forEach((component, componentIndex) => {
-        component.forEach((nodeId) => {
-          nodeToComponent[nodeId] = `component-${componentIndex}`;
-        });
-      });
-
-      // Add nodes only if they have direct children
-      nodesWithChildren.forEach((name) => {
-        const data = feedstockStatus[name];
-        const status = data.pr_status || "unknown";
-        const label = name;
-        const componentId = nodeToComponent[name];
-
-        g.setNode(name, {
-          label: label,
-          rx: 5,
-          ry: 5,
-          padding: 10,
-          style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-          labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-        });
-
-        if (componentId) {
-          g.setParent(name, componentId);
-        }
-      });
-
-      // Add edges from each feedstock to its immediate children
-      nodesWithChildren.forEach((name) => {
-        const data = feedstockStatus[name];
-
-        if (data.immediate_children && Array.isArray(data.immediate_children)) {
-          data.immediate_children.forEach((child) => {
-            if (feedstockStatus[child] && !mergedPackages.has(child)) {
-              if (!g.hasNode(child)) {
-                const childData = feedstockStatus[child];
-                const childStatus = childData.pr_status || "unknown";
-                const childLabel = child;
-                const componentId = nodeToComponent[child];
-
-                g.setNode(child, {
-                  label: childLabel,
-                  rx: 5,
-                  ry: 5,
-                  padding: 10,
-                  style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
-                  labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
-                });
-
-                if (componentId) {
-                  g.setParent(child, componentId);
-                }
-              }
-
-              g.setEdge(name, child, {
-                arrowheadStyle: "fill: #333;",
-                style: "stroke: #333; stroke-width: 2px;",
-              });
-            }
-          });
-        }
-      });
-
-      return g;
+      // Find connected components and build graph
+      const components = findConnectedComponents(prunedFeedstockStatus, nodesWithChildren);
+      return buildGraph(prunedFeedstockStatus, components, nodesWithChildren);
     };
 
     // === BUILD DATA STRUCTURE ===
@@ -829,51 +717,6 @@ function ImpactTable({ feedstockStatus, details }) {
       nodeMap[edge.w].incoming.push(edgeId);
     });
 
-    // === HELPER FUNCTION TO FIND ALL ANCESTORS ===
-    const findAllAncestors = (nodeId) => {
-      const ancestors = new Set();
-      const queue = [nodeId];
-      const visited = new Set([nodeId]);
-
-      while (queue.length > 0) {
-        const current = queue.shift();
-        const incomingEdges = nodeMap[current]?.incoming || [];
-
-        incomingEdges.forEach(eid => {
-          const parentId = edgeMap[eid].source;
-          if (!visited.has(parentId)) {
-            visited.add(parentId);
-            ancestors.add(parentId);
-            queue.push(parentId);
-          }
-        });
-      }
-
-      return ancestors;
-    };
-
-    // === HELPER FUNCTION TO FIND ALL DESCENDANTS ===
-    const findAllDescendants = (nodeId) => {
-      const descendants = new Set();
-      const queue = [nodeId];
-      const visited = new Set([nodeId]);
-
-      while (queue.length > 0) {
-        const current = queue.shift();
-        const outgoingEdges = nodeMap[current]?.outgoing || [];
-
-        outgoingEdges.forEach(eid => {
-          const childId = edgeMap[eid].target;
-          if (!visited.has(childId)) {
-            visited.add(childId);
-            descendants.add(childId);
-            queue.push(childId);
-          }
-        });
-      }
-
-      return descendants;
-    };
 
     // === HELPER FUNCTION TO APPLY HIGHLIGHTING ===
     const applyHighlight = (nodeId) => {
@@ -923,9 +766,9 @@ function ImpactTable({ feedstockStatus, details }) {
 
     // === HELPER FUNCTION TO CREATE ZOOMED SUBGRAPH ===
     const createZoomedGraph = (nodeId) => {
-      // Find all ancestors and descendants
-      const ancestors = findAllAncestors(nodeId);
-      const descendants = findAllDescendants(nodeId);
+      // Find all ancestors and descendants using utility functions
+      const ancestors = findAllAncestors(nodeId, nodeMap, edgeMap);
+      const descendants = findAllDescendants(nodeId, nodeMap, edgeMap);
       const visibleNodes = new Set([nodeId, ...ancestors, ...descendants]);
 
       // Create new subgraph with only visible nodes
@@ -939,7 +782,7 @@ function ImpactTable({ feedstockStatus, details }) {
 
       // Add all visible nodes to the subgraph
       visibleNodes.forEach(nodeName => {
-        const data = feedstockStatus[nodeName];
+        const data = prunedFeedstockStatus[nodeName];
         if (data) {
           const status = data.pr_status || "unknown";
           const label = nodeName;
@@ -1108,130 +951,73 @@ function ImpactTable({ feedstockStatus, details }) {
 
   // Handle zoom when node is selected from dropdown
   useEffect(() => {
-    if (selectedNodeId && isZoomedView && graph && feedstockStatus) {
-      // Need to access the helper functions to create zoomed graph
-      // We'll trigger the graph update which will cause re-render
-      const createZoomedGraphHelper = () => {
-        const mergedPackages = new Set(details?.done || []);
-        const nodeMap = {};
-        const edgeMap = {};
+    if (selectedNodeId && isZoomedView && prunedFeedstockStatus) {
+      // Create nodeMap and edgeMap for the zoomed graph
+      const nodeMap = {};
+      const edgeMap = {};
 
-        // Only initialize nodes that are not merged
-        Object.entries(feedstockStatus).forEach(([nodeId, data]) => {
-          if (!mergedPackages.has(nodeId)) {
-            nodeMap[nodeId] = { incoming: [], outgoing: [] };
-          }
-        });
+      // Initialize nodes from pruned feedstock status
+      Object.entries(prunedFeedstockStatus).forEach(([nodeId]) => {
+        nodeMap[nodeId] = { incoming: [], outgoing: [] };
+      });
 
-        Object.entries(feedstockStatus).forEach(([nodeId, data]) => {
-          if (mergedPackages.has(nodeId)) return; // Skip merged packages
-          if (data.immediate_children && Array.isArray(data.immediate_children)) {
-            data.immediate_children.forEach((childId) => {
-              if (feedstockStatus[childId] && !mergedPackages.has(childId)) {
-                const edgeId = `${nodeId}->${childId}`;
-                edgeMap[edgeId] = { source: nodeId, target: childId };
-                nodeMap[nodeId].outgoing.push(edgeId);
-                nodeMap[childId].incoming.push(edgeId);
-              }
-            });
-          }
-        });
-
-        const findAllAncestors = (nodeId) => {
-          const ancestors = new Set();
-          const queue = [];
-          const incomingEdges = nodeMap[nodeId]?.incoming || [];
-
-          incomingEdges.forEach(eid => {
-            const parentId = edgeMap[eid].source;
-            if (!ancestors.has(parentId)) {
-              ancestors.add(parentId);
-              queue.push(parentId);
+      // Build edges from pruned feedstock status
+      Object.entries(prunedFeedstockStatus).forEach(([nodeId, data]) => {
+        if (data.immediate_children && Array.isArray(data.immediate_children)) {
+          data.immediate_children.forEach((childId) => {
+            if (prunedFeedstockStatus[childId]) {
+              const edgeId = `${nodeId}->${childId}`;
+              edgeMap[edgeId] = { source: nodeId, target: childId };
+              nodeMap[nodeId].outgoing.push(edgeId);
+              nodeMap[childId].incoming.push(edgeId);
             }
           });
+        }
+      });
 
-          while (queue.length > 0) {
-            const current = queue.shift();
-            const parentEdges = nodeMap[current]?.incoming || [];
+      // Use utility functions to find ancestors and descendants
+      const ancestors = findAllAncestors(selectedNodeId, nodeMap, edgeMap);
+      const descendants = findAllDescendants(selectedNodeId, nodeMap, edgeMap);
+      const visibleNodes = new Set([selectedNodeId, ...ancestors, ...descendants]);
 
-            parentEdges.forEach(eid => {
-              const parentId = edgeMap[eid].source;
-              if (!ancestors.has(parentId)) {
-                ancestors.add(parentId);
-                queue.push(parentId);
-              }
-            });
-          }
+      // Create subgraph with visible nodes only
+      const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
+        .setGraph({
+          nodesep: 50,
+          ranksep: 100,
+          rankdir: "TB",
+        })
+        .setDefaultEdgeLabel(() => ({}));
 
-          return ancestors;
-        };
+      visibleNodes.forEach(nodeName => {
+        const data = prunedFeedstockStatus[nodeName];
+        if (data) {
+          const status = data.pr_status || "unknown";
+          const label = nodeName;
 
-        const findAllDescendants = (nodeId) => {
-          const descendants = new Set();
-          const queue = [nodeId];
-          const visited = new Set([nodeId]);
+          subgraph.setNode(nodeName, {
+            label: label,
+            rx: 5,
+            ry: 5,
+            padding: 10,
+            style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+            labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+          });
+        }
+      });
 
-          while (queue.length > 0) {
-            const current = queue.shift();
-            const outgoingEdges = nodeMap[current]?.outgoing || [];
+      Object.entries(edgeMap).forEach(([edgeId, edge]) => {
+        if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
+          subgraph.setEdge(edge.source, edge.target, {
+            arrowheadStyle: "fill: #333;",
+            style: "stroke: #333; stroke-width: 2px;",
+          });
+        }
+      });
 
-            outgoingEdges.forEach(eid => {
-              const childId = edgeMap[eid].target;
-              if (!visited.has(childId)) {
-                visited.add(childId);
-                descendants.add(childId);
-                queue.push(childId);
-              }
-            });
-          }
-
-          return descendants;
-        };
-
-        const ancestors = findAllAncestors(selectedNodeId);
-        const descendants = findAllDescendants(selectedNodeId);
-        const visibleNodes = new Set([selectedNodeId, ...ancestors, ...descendants]);
-
-        const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-          .setGraph({
-            nodesep: 50,
-            ranksep: 100,
-            rankdir: "TB",
-          })
-          .setDefaultEdgeLabel(() => ({}));
-
-        visibleNodes.forEach(nodeName => {
-          const data = feedstockStatus[nodeName];
-          if (data) {
-            const status = data.pr_status || "unknown";
-            const label = nodeName;
-
-            subgraph.setNode(nodeName, {
-              label: label,
-              rx: 5,
-              ry: 5,
-              padding: 10,
-              style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-              labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-            });
-          }
-        });
-
-        Object.entries(edgeMap).forEach(([edgeId, edge]) => {
-          if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-            subgraph.setEdge(edge.source, edge.target, {
-              arrowheadStyle: "fill: #333;",
-              style: "stroke: #333; stroke-width: 2px;",
-            });
-          }
-        });
-
-        return subgraph;
-      };
-
-      setGraph(createZoomedGraphHelper());
+      setGraph(subgraph);
     }
-  }, [selectedNodeId, isZoomedView, feedstockStatus, details]);
+  }, [selectedNodeId, isZoomedView, prunedFeedstockStatus]);
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
