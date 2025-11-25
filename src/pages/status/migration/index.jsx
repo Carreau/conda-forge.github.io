@@ -711,49 +711,10 @@ function ImpactTable({ graphDataStructure, details }) {
   // Handle zoom when node is selected from dropdown
   useEffect(() => {
     if (selectedNodeId && allNodeIds.length > 0) {
-      // Use utility functions to find ancestors and descendants from data structure
-      const ancestors = findAllAncestors(selectedNodeId, graphDataStructure);
-      const descendants = findAllDescendants(selectedNodeId, graphDataStructure);
-      const visibleNodes = new Set([selectedNodeId, ...ancestors, ...descendants]);
-
-      // Create subgraph with visible nodes only
-      const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-        .setGraph({
-          nodesep: 50,
-          ranksep: 100,
-          rankdir: "TB",
-        })
-        .setDefaultEdgeLabel(() => ({}));
-
-      visibleNodes.forEach(nodeName => {
-        const nodeData = nodeMap[nodeName];
-        if (nodeData) {
-          const status = nodeData.data.pr_status || "unknown";
-          const label = nodeName;
-
-          subgraph.setNode(nodeName, {
-            label: label,
-            rx: 5,
-            ry: 5,
-            padding: 10,
-            style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-            labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-          });
-        }
-      });
-
-      Object.entries(edgeMap).forEach(([edgeId, edge]) => {
-        if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-          subgraph.setEdge(edge.source, edge.target, {
-            arrowheadStyle: "fill: #333;",
-            style: "stroke: #333; stroke-width: 2px;",
-          });
-        }
-      });
-
+      const subgraph = createZoomedGraph(selectedNodeId, graphDataStructure);
       setGraph(subgraph);
     }
-  }, [selectedNodeId, allNodeIds, nodeMap, edgeMap]);
+  }, [selectedNodeId, allNodeIds, graphDataStructure]);
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
