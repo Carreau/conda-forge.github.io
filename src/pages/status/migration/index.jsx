@@ -32,7 +32,7 @@ const ORDERED = [
   ["done", "Done", true],
   ["in-pr", "In PR", false],
   ["awaiting-pr", "Awaiting PR", false],
-  ["awaiting-parents", "Awaiting parents", false],
+  ["awaiting-parents", "Awaiting external dependency", false],
   ["not-solvable", "Not solvable", false],
   ["bot-error", "Bot error", false],
 ];
@@ -331,6 +331,19 @@ function Table({ details }) {
   const [sortConfig, setSortConfig] = useState({ key: "num_descendants", direction: "desc" });
   const feedstock = details._feedstock_status;
 
+  // Create a set of all children in the graph
+  const allChildrenInGraph = React.useMemo(() => {
+    const children = new Set();
+    Object.entries(feedstock).forEach(([name, data]) => {
+      if (data.immediate_children && Array.isArray(data.immediate_children)) {
+        data.immediate_children.forEach(child => {
+          children.add(child);
+        });
+      }
+    });
+    return children;
+  }, [feedstock]);
+
   const getFilteredRows = () => {
     return ORDERED.reduce((rows, [status]) => (
       filters[status] ? rows :
@@ -413,7 +426,7 @@ function Table({ details }) {
         </thead>
         <tbody>
           {rows.map(([name, status], i) =>
-            <Row key={i}>{{ feedstock: feedstock[name], name, status }}</Row>
+            <Row key={i}>{{ feedstock: feedstock[name], name, status, allFeedstocks: feedstock, allChildrenInGraph }}</Row>
           )}
         </tbody>
       </table>}
@@ -423,16 +436,24 @@ function Table({ details }) {
 
 function Row({ children }) {
   const [collapsed, setState] = useState(true);
-  const { feedstock, name, status } = children;
+  const { feedstock, name, status, allFeedstocks, allChildrenInGraph } = children;
   const immediate_children = feedstock["immediate_children"] || [];
   const total_children = feedstock["num_descendants"];
   const href = feedstock["pr_url"];
   const details = feedstock["pre_pr_migrator_status"];
   const pr_status = feedstock["pr_status"];
 
+  // For "awaiting-parents" status, highlight packages that are NOT children of any other package in the graph
+  // These packages are marked as awaiting parents but have no parent in the graph
+  let hasNoParentInGraph = false;
+  if (status === "awaiting-parents") {
+    // Check if this package is a child of any package in the graph
+    hasNoParentInGraph = !allChildrenInGraph.has(name);
+  }
+  const rowStyle = hasNoParentInGraph ? { backgroundColor: "#ffe6e6" } : {};
 
   return (<>
-    <tr>
+    <tr style={rowStyle}>
       <td>
       {href ? (
         <a href={href}>{name}</a>
@@ -526,6 +547,31 @@ function ImpactTable({ feedstockStatus, details }) {
       name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [searchTerm, allNodeNames]);
+
+  // Identify nodes in "awaiting-parents" that have no parents in the graph
+  const awaitingParentsNoParent = React.useMemo(() => {
+    const noParents = new Set();
+    const allChildren = new Set();
+
+    // Build set of all children in the graph
+    Object.entries(feedstockStatus).forEach(([name, data]) => {
+      if (data.immediate_children && Array.isArray(data.immediate_children)) {
+        data.immediate_children.forEach(child => {
+          allChildren.add(child);
+        });
+      }
+    });
+
+    // Find packages in awaiting-parents that are not children of any node
+    const awaitingParents = details?.["awaiting-parents"] || [];
+    awaitingParents.forEach(name => {
+      if (!allChildren.has(name)) {
+        noParents.add(name);
+      }
+    });
+
+    return noParents;
+  }, [feedstockStatus, details]);
 
   const getStatusColor = (prStatus) => {
     switch (prStatus) {
@@ -1050,6 +1096,14 @@ function ImpactTable({ feedstockStatus, details }) {
           .style("stroke-width", "3px")
           .style("fill", "#ADD8E6");
       }
+
+      // Mark nodes in awaiting-parents with no parents with a light red background
+      if (awaitingParentsNoParent.has(nodeId)) {
+        d3.select(this).selectAll("polygon, circle, ellipse, rect")
+          .style("fill", "#ffe6e6")
+          .style("stroke-dasharray", "5,5")
+          .style("stroke-width", "2px");
+      }
     });
 
     // Add data attributes to edge elements
@@ -1155,7 +1209,7 @@ function ImpactTable({ feedstockStatus, details }) {
         .translate(initialTranslate[0], initialTranslate[1])
         .scale(initialScale)
     );
-  }, [graph, selectedNodeId, isZoomedView]);
+  }, [graph, selectedNodeId, isZoomedView, awaitingParentsNoParent]);
 
   // Handle zoom when node is selected from dropdown
   useEffect(() => {
