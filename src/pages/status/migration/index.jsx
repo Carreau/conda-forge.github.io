@@ -17,11 +17,8 @@ import {
   buildInitialGraph,
   getStatusColor,
   getStatusTextColor,
-  getNodeNamesWithChildren,
   filterNodesBySearchTerm,
   getAwaitingParentsWithNoParent,
-  getNodesWithChildren,
-  findConnectedComponents,
   findAllAncestors,
   findAllDescendants,
   buildGraph
@@ -559,9 +556,9 @@ function ImpactTable({ graphDataStructure, details }) {
     if (!allNodeIds || allNodeIds.length === 0) return;
 
     // Build dagre graph from data structure
-    const g = buildInitialGraph(nodeMap, allNodeIds);
+    const g = buildInitialGraph(nodeMap, edgeMap, allNodeIds);
     setGraph(g);
-  }, [allNodeIds, nodeMap]);
+  }, [allNodeIds, nodeMap, edgeMap]);
 
   // Get all available node names
   const allNodeNames = React.useMemo(() => {
@@ -584,7 +581,7 @@ function ImpactTable({ graphDataStructure, details }) {
     // === HELPER FUNCTION TO REBUILD GRAPH ===
     const rebuildOriginalGraph = () => {
       if (!allNodeIds || allNodeIds.length === 0) return null;
-      return buildInitialGraph(nodeMap, allNodeIds);
+      return buildInitialGraph(nodeMap, edgeMap, allNodeIds);
     };
 
 

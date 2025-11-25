@@ -36,16 +36,6 @@ export const getStatusTextColor = (prStatus) => {
   return prStatus === "clean" ? "#ffffff" : "#000000";
 };
 
-export const getNodeNamesWithChildren = (feedstockStatus) => {
-  if (!feedstockStatus) return [];
-  return Object.keys(feedstockStatus)
-    .filter(name => {
-      const data = feedstockStatus[name];
-      return data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0;
-    })
-    .sort();
-};
-
 export const filterNodesBySearchTerm = (nodeNames, searchTerm) => {
   if (!searchTerm) return [];
   return nodeNames.filter(name =>
@@ -80,26 +70,6 @@ export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
   });
 
   return noParents;
-};
-
-export const getNodesWithChildren = (feedstockStatus, mergedPackages) => {
-  const nodesWithChildren = new Set();
-
-  Object.entries(feedstockStatus).forEach(([name, data]) => {
-    if (mergedPackages.has(name)) {
-      return;
-    }
-
-    if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
-      // Check if at least one child is not merged
-      const hasNonMergedChild = data.immediate_children.some(child => !mergedPackages.has(child));
-      if (hasNonMergedChild) {
-        nodesWithChildren.add(name);
-      }
-    }
-  });
-
-  return nodesWithChildren;
 };
 
 export const findAllAncestors = (nodeId, nodeMap, edgeMap) => {
@@ -146,7 +116,7 @@ export const findAllDescendants = (nodeId, nodeMap, edgeMap) => {
   return descendants;
 };
 
-export const findConnectedComponents = (feedstockStatus, nodesWithChildren) => {
+export const findConnectedComponents = (nodeMap, edgeMap, nodesWithChildren) => {
   const visited = new Set();
   const components = [];
 
@@ -155,20 +125,24 @@ export const findConnectedComponents = (feedstockStatus, nodesWithChildren) => {
     visited.add(nodeId);
     component.add(nodeId);
 
-    const data = feedstockStatus[nodeId];
-    if (data && data.immediate_children && Array.isArray(data.immediate_children)) {
-      data.immediate_children.forEach((child) => {
-        if (feedstockStatus[child]) {
-          dfs(child, component, visited);
-        }
-      });
-    }
-
-    Object.entries(feedstockStatus).forEach(([potentialParent, parentData]) => {
-      if (parentData.immediate_children && parentData.immediate_children.includes(nodeId)) {
-        dfs(potentialParent, component, visited);
+    const nodeInfo = nodeMap[nodeId];
+    if (nodeInfo) {
+      // Follow outgoing edges (children)
+      if (nodeInfo.outgoing && nodeInfo.outgoing.length > 0) {
+        nodeInfo.outgoing.forEach((edgeId) => {
+          const childId = edgeMap[edgeId].target;
+          dfs(childId, component, visited);
+        });
       }
-    });
+
+      // Follow incoming edges (parents)
+      if (nodeInfo.incoming && nodeInfo.incoming.length > 0) {
+        nodeInfo.incoming.forEach((edgeId) => {
+          const parentId = edgeMap[edgeId].source;
+          dfs(parentId, component, visited);
+        });
+      }
+    }
   };
 
   nodesWithChildren.forEach((name) => {
@@ -225,7 +199,7 @@ export const buildGraphDataStructure = (feedstockStatus) => {
   };
 };
 
-export const buildInitialGraph = (nodeMap, allNodeIds) => {
+export const buildInitialGraph = (nodeMap, edgeMap, allNodeIds) => {
   if (!allNodeIds || allNodeIds.length === 0) {
     return null;
   }
@@ -238,20 +212,14 @@ export const buildInitialGraph = (nodeMap, allNodeIds) => {
     }
   });
 
-  // Reconstruct feedstock for findConnectedComponents (it still needs it)
-  const feedstockStatus = {};
-  allNodeIds.forEach(nodeId => {
-    feedstockStatus[nodeId] = nodeMap[nodeId].data;
-  });
+  // Find connected components using the data structure
+  const components = findConnectedComponents(nodeMap, edgeMap, nodesWithChildren);
 
-  // Find connected components
-  const components = findConnectedComponents(feedstockStatus, nodesWithChildren);
-
-  // Build and return the graph
-  return buildGraph(feedstockStatus, components, nodesWithChildren);
+  // Build and return the graph using the data structure
+  return buildGraph(nodeMap, edgeMap, components, nodesWithChildren);
 };
 
-export const buildGraph = (prunedFeedstockStatus, components, nodesWithChildren) => {
+export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
   const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
     .setGraph({
       nodesep: 50,
@@ -280,7 +248,10 @@ export const buildGraph = (prunedFeedstockStatus, components, nodesWithChildren)
 
   // Add nodes only if they have direct children
   nodesWithChildren.forEach((name) => {
-    const data = prunedFeedstockStatus[name];
+    const nodeInfo = nodeMap[name];
+    if (!nodeInfo) return;
+
+    const data = nodeInfo.data;
     const status = data.pr_status || "unknown";
     const label = name;
     const componentId = nodeToComponent[name];
@@ -299,40 +270,47 @@ export const buildGraph = (prunedFeedstockStatus, components, nodesWithChildren)
     }
   });
 
-  // Add edges from each feedstock to its immediate children
+  // Add edges and child nodes using the edgeMap
+  const addedNodes = new Set(nodesWithChildren);
+
   nodesWithChildren.forEach((name) => {
-    const data = prunedFeedstockStatus[name];
+    const nodeInfo = nodeMap[name];
+    if (!nodeInfo) return;
 
-    if (data.immediate_children && Array.isArray(data.immediate_children)) {
-      data.immediate_children.forEach((child) => {
-        if (prunedFeedstockStatus[child]) {
-          if (!g.hasNode(child)) {
-            const childData = prunedFeedstockStatus[child];
-            const childStatus = childData.pr_status || "unknown";
-            const childLabel = child;
-            const componentId = nodeToComponent[child];
+    // Process all outgoing edges from this node
+    nodeInfo.outgoing.forEach((edgeId) => {
+      const childId = edgeMap[edgeId].target;
+      const childNodeInfo = nodeMap[childId];
 
-            g.setNode(child, {
-              label: childLabel,
-              rx: 5,
-              ry: 5,
-              padding: 10,
-              style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
-              labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
-            });
+      if (childNodeInfo && !addedNodes.has(childId)) {
+        // Add the child node if not already added
+        const childData = childNodeInfo.data;
+        const childStatus = childData.pr_status || "unknown";
+        const childLabel = childId;
+        const componentId = nodeToComponent[childId];
 
-            if (componentId) {
-              g.setParent(child, componentId);
-            }
-          }
+        g.setNode(childId, {
+          label: childLabel,
+          rx: 5,
+          ry: 5,
+          padding: 10,
+          style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
+          labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
+        });
 
-          g.setEdge(name, child, {
-            arrowheadStyle: "fill: #333;",
-            style: "stroke: #333; stroke-width: 2px;",
-          });
+        if (componentId) {
+          g.setParent(childId, componentId);
         }
+
+        addedNodes.add(childId);
+      }
+
+      // Add edge
+      g.setEdge(name, childId, {
+        arrowheadStyle: "fill: #333;",
+        style: "stroke: #333; stroke-width: 2px;",
       });
-    }
+    });
   });
 
   return g;
