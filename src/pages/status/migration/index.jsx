@@ -592,7 +592,6 @@ function ImpactTable({ feedstockStatus, details }) {
 
   useEffect(() => {
     if (!feedstockStatus || Object.keys(feedstockStatus).length === 0) {
-      console.log("No feedstock status data available");
       return;
     }
 
@@ -659,8 +658,6 @@ function ImpactTable({ feedstockStatus, details }) {
         }
       }
     });
-
-    console.log("Connected components:", components.map(c => Array.from(c)));
 
     // Create graph with compound structure (subgraphs for each component)
     const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
@@ -923,9 +920,6 @@ function ImpactTable({ feedstockStatus, details }) {
       nodeMap[edge.w].incoming.push(edgeId);
     });
 
-    console.log("Node map:", nodeMap);
-    console.log("Edge map:", edgeMap);
-
     // === HELPER FUNCTION TO FIND ALL ANCESTORS ===
     const findAllAncestors = (nodeId) => {
       const ancestors = new Set();
@@ -1024,11 +1018,6 @@ function ImpactTable({ feedstockStatus, details }) {
       const ancestors = findAllAncestors(nodeId);
       const descendants = findAllDescendants(nodeId);
       const visibleNodes = new Set([nodeId, ...ancestors, ...descendants]);
-
-      console.log("Zoomed view for:", nodeId);
-      console.log("Ancestors:", Array.from(ancestors));
-      console.log("Descendants:", Array.from(descendants));
-      console.log("Total visible nodes:", visibleNodes.size);
 
       // Create new subgraph with only visible nodes
       const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
@@ -1163,8 +1152,6 @@ function ImpactTable({ feedstockStatus, details }) {
         const zoomedGraph = createZoomedGraph(nodeId);
         setGraph(zoomedGraph);
       }
-
-      console.log("Selected node:", nodeId, "Zoomed: true");
     });
 
     // Click on background (void) to reset view
@@ -1175,7 +1162,6 @@ function ImpactTable({ feedstockStatus, details }) {
         setIsZoomedView(false);
         setGraph(rebuildOriginalGraph());
         applyHighlight(null);
-        console.log("Reset view");
       }
     });
 
