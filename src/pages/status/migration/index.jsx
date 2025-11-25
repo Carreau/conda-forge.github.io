@@ -550,22 +550,15 @@ function ImpactTable({ graphDataStructure, details }) {
 
   // Build dagre graph for rendering from data structure
   useEffect(() => {
-    if (!allNodeIds || allNodeIds.length === 0) return;
-
     // Build dagre graph from data structure
     const g = buildInitialGraph(graphDataStructure);
     setGraph(g);
   }, [graphDataStructure]);
 
-  // Get all available node names
-  const allNodeNames = React.useMemo(() => {
-    return allNodeIds || [];
-  }, [allNodeIds]);
-
   // Filter nodes based on search term
   const filteredNodes = React.useMemo(() => {
-    return filterNodesBySearchTerm(allNodeNames, searchTerm);
-  }, [searchTerm, allNodeNames]);
+    return filterNodesBySearchTerm(allNodeIds, searchTerm);
+  }, [searchTerm, allNodeIds]);
 
   // Identify nodes in "awaiting-parents" that have no parents in the graph
   const awaitingParentsNoParent = React.useMemo(() => {
@@ -577,7 +570,6 @@ function ImpactTable({ graphDataStructure, details }) {
 
     // === HELPER FUNCTION TO REBUILD GRAPH ===
     const rebuildOriginalGraph = () => {
-      if (!allNodeIds || allNodeIds.length === 0) return null;
       return buildInitialGraph(graphDataStructure);
     };
 
@@ -710,11 +702,11 @@ function ImpactTable({ graphDataStructure, details }) {
 
   // Handle zoom when node is selected from dropdown
   useEffect(() => {
-    if (selectedNodeId && allNodeIds.length > 0) {
+    if (selectedNodeId) {
       const subgraph = createZoomedGraph(selectedNodeId, graphDataStructure);
       setGraph(subgraph);
     }
-  }, [selectedNodeId, allNodeIds, graphDataStructure]);
+  }, [selectedNodeId, graphDataStructure]);
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
