@@ -553,9 +553,9 @@ function ImpactTable({ graphDataStructure, details }) {
     if (!allNodeIds || allNodeIds.length === 0) return;
 
     // Build dagre graph from data structure
-    const g = buildInitialGraph(nodeMap, edgeMap, allNodeIds);
+    const g = buildInitialGraph(graphDataStructure);
     setGraph(g);
-  }, [allNodeIds, nodeMap, edgeMap]);
+  }, [graphDataStructure]);
 
   // Get all available node names
   const allNodeNames = React.useMemo(() => {
@@ -578,7 +578,7 @@ function ImpactTable({ graphDataStructure, details }) {
     // === HELPER FUNCTION TO REBUILD GRAPH ===
     const rebuildOriginalGraph = () => {
       if (!allNodeIds || allNodeIds.length === 0) return null;
-      return buildInitialGraph(nodeMap, edgeMap, allNodeIds);
+      return buildInitialGraph(graphDataStructure);
     };
 
     // Clear previous content
@@ -638,14 +638,14 @@ function ImpactTable({ graphDataStructure, details }) {
       // Only apply hover highlight if no node is selected
       if (!selectedNodeId) {
         const nodeId = d3.select(this).attr("data-node-id");
-        applyHighlight(svgGroup, nodeId, nodeMap, edgeMap);
+        applyHighlight(svgGroup, nodeId, graphDataStructure);
       }
     });
 
     svgGroup.selectAll("g.node").on("mouseleave", function () {
       // Only reset if no node is selected
       if (!selectedNodeId) {
-        applyHighlight(svgGroup, null, nodeMap, edgeMap);
+        applyHighlight(svgGroup, null, graphDataStructure);
       }
     });
 
@@ -672,7 +672,7 @@ function ImpactTable({ graphDataStructure, details }) {
       if (event.target === this) {
         setSelectedNodeId(null);
         setGraph(rebuildOriginalGraph());
-        applyHighlight(svgGroup, null, nodeMap, edgeMap);
+        applyHighlight(svgGroup, null, graphDataStructure);
       }
     });
 

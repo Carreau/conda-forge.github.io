@@ -202,7 +202,9 @@ export const buildGraphDataStructure = (feedstockStatus) => {
   };
 };
 
-export const buildInitialGraph = (nodeMap, edgeMap, allNodeIds) => {
+export const buildInitialGraph = (graphDataStructure) => {
+  const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
+
   if (!allNodeIds || allNodeIds.length === 0) {
     return null;
   }
@@ -222,7 +224,9 @@ export const buildInitialGraph = (nodeMap, edgeMap, allNodeIds) => {
   return buildGraph(nodeMap, edgeMap, components, nodesWithChildren);
 };
 
-export const applyHighlight = (svgGroup, nodeId, nodeMap, edgeMap) => {
+export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
+  const { nodeMap, edgeMap } = graphDataStructure;
+
   if (!nodeId) {
     // Clear all highlights
     svgGroup.selectAll("g.node").style("opacity", 1);
