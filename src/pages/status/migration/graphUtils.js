@@ -53,15 +53,20 @@ export const filterNodesBySearchTerm = (nodeNames, searchTerm) => {
   );
 };
 
-export const getAwaitingParentsWithNoParent = (feedstockStatus, details) => {
+export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
   const noParents = new Set();
   const allChildren = new Set();
 
-  // Build set of all children in the graph
-  Object.entries(feedstockStatus).forEach(([name, data]) => {
-    if (data.immediate_children && Array.isArray(data.immediate_children)) {
-      data.immediate_children.forEach(child => {
-        allChildren.add(child);
+  // Build set of all children in the graph using nodeMap
+  Object.entries(nodeMap).forEach(([nodeId, nodeInfo]) => {
+    if (nodeInfo.outgoing && nodeInfo.outgoing.length > 0) {
+      // Node has outgoing edges, collect all targets
+      nodeInfo.outgoing.forEach(edgeId => {
+        // Extract target from edgeId (format: "source->target")
+        const target = edgeId.split('->')[1];
+        if (target) {
+          allChildren.add(target);
+        }
       });
     }
   });
@@ -177,6 +182,73 @@ export const findConnectedComponents = (feedstockStatus, nodesWithChildren) => {
   });
 
   return components;
+};
+
+export const buildGraphDataStructure = (feedstockStatus) => {
+  if (!feedstockStatus || Object.keys(feedstockStatus).length === 0) {
+    return { nodeMap: {}, edgeMap: {}, allNodeIds: [] };
+  }
+
+  const nodeMap = {};
+  const edgeMap = {};
+
+  // Initialize all nodes
+  Object.keys(feedstockStatus).forEach(nodeId => {
+    nodeMap[nodeId] = {
+      data: feedstockStatus[nodeId],
+      incoming: [],
+      outgoing: []
+    };
+  });
+
+  // Build edges from immediate_children
+  Object.entries(feedstockStatus).forEach(([nodeId, data]) => {
+    if (data.immediate_children && Array.isArray(data.immediate_children)) {
+      data.immediate_children.forEach((childId) => {
+        if (feedstockStatus[childId]) {
+          const edgeId = `${nodeId}->${childId}`;
+          edgeMap[edgeId] = {
+            source: nodeId,
+            target: childId
+          };
+          nodeMap[nodeId].outgoing.push(edgeId);
+          nodeMap[childId].incoming.push(edgeId);
+        }
+      });
+    }
+  });
+
+  return {
+    nodeMap,
+    edgeMap,
+    allNodeIds: Object.keys(nodeMap)
+  };
+};
+
+export const buildInitialGraph = (nodeMap, allNodeIds) => {
+  if (!allNodeIds || allNodeIds.length === 0) {
+    return null;
+  }
+
+  // Identify nodes that have direct children using nodeMap
+  const nodesWithChildren = new Set();
+  allNodeIds.forEach(nodeId => {
+    if (nodeMap[nodeId].outgoing && nodeMap[nodeId].outgoing.length > 0) {
+      nodesWithChildren.add(nodeId);
+    }
+  });
+
+  // Reconstruct feedstock for findConnectedComponents (it still needs it)
+  const feedstockStatus = {};
+  allNodeIds.forEach(nodeId => {
+    feedstockStatus[nodeId] = nodeMap[nodeId].data;
+  });
+
+  // Find connected components
+  const components = findConnectedComponents(feedstockStatus, nodesWithChildren);
+
+  // Build and return the graph
+  return buildGraph(feedstockStatus, components, nodesWithChildren);
 };
 
 export const buildGraph = (prunedFeedstockStatus, components, nodesWithChildren) => {

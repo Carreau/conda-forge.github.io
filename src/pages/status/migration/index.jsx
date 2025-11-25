@@ -13,6 +13,8 @@ import * as dagreD3 from "dagre-d3-es";
 import * as d3 from "d3";
 import {
   getPrunedFeedstockStatus,
+  buildGraphDataStructure,
+  buildInitialGraph,
   getStatusColor,
   getStatusTextColor,
   getNodeNamesWithChildren,
@@ -131,6 +133,14 @@ export default function MigrationDetails() {
   }, []);
   if (state.redirect) return <Redirect to="/status" replace />;
   const { details, name, view } = state;
+
+  // Build graph data structure from pruned feedstock status
+  const graphDataStructure = React.useMemo(() => {
+    if (!details) return { nodeMap: {}, edgeMap: {}, allNodeIds: [] };
+    const prunedFeedstock = getPrunedFeedstockStatus(details._feedstock_status, details);
+    return buildGraphDataStructure(prunedFeedstock);
+  }, [details]);
+
   return (
     <Layout
       title={siteConfig.title}
@@ -192,7 +202,7 @@ export default function MigrationDetails() {
             {view === "graph" ?
               <Graph>{name}</Graph> :
               view === "impact" ?
-                (details && <ImpactTable feedstockStatus={getPrunedFeedstockStatus(details._feedstock_status, details)} details={details} />) :
+                (details && <ImpactTable graphDataStructure={graphDataStructure} details={details} />) :
                 (details && <Table details={details} />)
             }
           </div>
@@ -534,7 +544,7 @@ async function checkPausedOrClosed(name) {
   }
 }
 
-function ImpactTable({ feedstockStatus, details }) {
+function ImpactTable({ graphDataStructure, details }) {
   const [graph, setGraph] = useState(null);
   const svgRef = React.useRef();
   const [selectedNodeId, setSelectedNodeId] = React.useState(null);
@@ -542,10 +552,21 @@ function ImpactTable({ feedstockStatus, details }) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [showDropdown, setShowDropdown] = React.useState(false);
 
-  // Get all available node names from feedstockStatus
+  const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
+
+  // Build dagre graph for rendering from data structure
+  useEffect(() => {
+    if (!allNodeIds || allNodeIds.length === 0) return;
+
+    // Build dagre graph from data structure
+    const g = buildInitialGraph(nodeMap, allNodeIds);
+    setGraph(g);
+  }, [allNodeIds, nodeMap]);
+
+  // Get all available node names
   const allNodeNames = React.useMemo(() => {
-    return getNodeNamesWithChildren(feedstockStatus);
-  }, [feedstockStatus]);
+    return allNodeIds || [];
+  }, [allNodeIds]);
 
   // Filter nodes based on search term
   const filteredNodes = React.useMemo(() => {
@@ -554,153 +575,17 @@ function ImpactTable({ feedstockStatus, details }) {
 
   // Identify nodes in "awaiting-parents" that have no parents in the graph
   const awaitingParentsNoParent = React.useMemo(() => {
-    return getAwaitingParentsWithNoParent(feedstockStatus, details);
-  }, [feedstockStatus, details]);
-
-  useEffect(() => {
-    if (!feedstockStatus || Object.keys(feedstockStatus).length === 0) {
-      return;
-    }
-
-    // First pass: identify nodes that have direct children
-    const nodesWithChildren = new Set();
-    Object.entries(feedstockStatus).forEach(([name, data]) => {
-      if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
-        nodesWithChildren.add(name);
-      }
-    });
-
-    // === OPTIMIZE LAYOUT: FIND CONNECTED COMPONENTS ===
-    // This helps minimize edge crossings by grouping related packages together
-    const components = findConnectedComponents(feedstockStatus, nodesWithChildren);
-
-    // Create graph with compound structure (subgraphs for each component)
-    const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-      .setGraph({
-        nodesep: 50,
-        ranksep: 100,
-        rankdir: "TB",
-      })
-      .setDefaultEdgeLabel(() => ({}));
-
-    // Add compound nodes (subgraphs) for each component
-    components.forEach((component, componentIndex) => {
-      const componentId = `component-${componentIndex}`;
-      g.setNode(componentId, {
-        label: "",
-        clusterLabelPos: "top",
-        style: "fill: none; stroke: #ccc; stroke-width: 1px; stroke-dasharray: 5,5;",
-      });
-    });
-
-    // Add nodes to their components
-    const nodeToComponent = {};
-    components.forEach((component, componentIndex) => {
-      component.forEach((nodeId) => {
-        nodeToComponent[nodeId] = `component-${componentIndex}`;
-      });
-    });
-
-    // Add nodes only if they have direct children
-    nodesWithChildren.forEach((name) => {
-      const data = feedstockStatus[name];
-      const status = data.pr_status || "unknown";
-      const label = name;
-      const componentId = nodeToComponent[name];
-
-      g.setNode(name, {
-        label: label,
-        rx: 5,
-        ry: 5,
-        padding: 10,
-        style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-        labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-      });
-
-      if (componentId) {
-        g.setParent(name, componentId);
-      }
-    });
-
-    // Add edges from each feedstock to its immediate children
-    nodesWithChildren.forEach((name) => {
-      const data = feedstockStatus[name];
-
-      if (data.immediate_children && Array.isArray(data.immediate_children)) {
-        data.immediate_children.forEach((child) => {
-          if (feedstockStatus[child]) {
-            // Add child node if it doesn't exist yet
-            if (!g.hasNode(child)) {
-              const childData = feedstockStatus[child];
-              const childStatus = childData.pr_status || "unknown";
-              const childLabel = child;
-              const componentId = nodeToComponent[child];
-
-              g.setNode(child, {
-                label: childLabel,
-                rx: 5,
-                ry: 5,
-                padding: 10,
-                style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
-                labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
-              });
-
-              if (componentId) {
-                g.setParent(child, componentId);
-              }
-            }
-
-            g.setEdge(name, child, {
-              arrowheadStyle: "fill: #333;",
-              style: "stroke: #333; stroke-width: 2px;",
-            });
-          }
-        });
-      }
-    });
-
-    setGraph(g);
-  }, [feedstockStatus]);
+    return getAwaitingParentsWithNoParent(nodeMap, details);
+  }, [nodeMap, details]);
 
   useEffect(() => {
     if (!graph || !svgRef.current) return;
 
-    // === HELPER FUNCTION TO REBUILD GRAPH FROM BACKUP ===
+    // === HELPER FUNCTION TO REBUILD GRAPH ===
     const rebuildOriginalGraph = () => {
-      // Identify nodes that have direct children
-      const nodesWithChildren = new Set();
-      Object.entries(feedstockStatus).forEach(([name, data]) => {
-        if (data.immediate_children && Array.isArray(data.immediate_children) && data.immediate_children.length > 0) {
-          nodesWithChildren.add(name);
-        }
-      });
-
-      // Find connected components and build graph
-      const components = findConnectedComponents(feedstockStatus, nodesWithChildren);
-      return buildGraph(feedstockStatus, components, nodesWithChildren);
+      if (!allNodeIds || allNodeIds.length === 0) return null;
+      return buildInitialGraph(nodeMap, allNodeIds);
     };
-
-    // === BUILD DATA STRUCTURE ===
-    // Create a lookup structure: nodeId -> { outgoing: [edgeIds], incoming: [edgeIds] }
-    const nodeMap = {};
-    graph.nodes().forEach(nodeId => {
-      nodeMap[nodeId] = {
-        outgoing: [],
-        incoming: []
-      };
-    });
-
-    // Map edges: edgeId -> { source, target }
-    const edgeMap = {};
-    graph.edges().forEach(edge => {
-      const edgeId = `${edge.v}→${edge.w}`;
-      edgeMap[edgeId] = {
-        source: edge.v,
-        target: edge.w
-      };
-      nodeMap[edge.v].outgoing.push(edgeId);
-      nodeMap[edge.w].incoming.push(edgeId);
-    });
 
 
     // === HELPER FUNCTION TO APPLY HIGHLIGHTING ===
@@ -767,9 +652,9 @@ function ImpactTable({ feedstockStatus, details }) {
 
       // Add all visible nodes to the subgraph
       visibleNodes.forEach(nodeName => {
-        const data = feedstockStatus[nodeName];
-        if (data) {
-          const status = data.pr_status || "unknown";
+        const nodeInfo = nodeMap[nodeName];
+        if (nodeInfo) {
+          const status = nodeInfo.data.pr_status || "unknown";
           const label = nodeName;
 
           subgraph.setNode(nodeName, {
@@ -936,31 +821,8 @@ function ImpactTable({ feedstockStatus, details }) {
 
   // Handle zoom when node is selected from dropdown
   useEffect(() => {
-    if (selectedNodeId && isZoomedView && feedstockStatus) {
-      // Create nodeMap and edgeMap for the zoomed graph
-      const nodeMap = {};
-      const edgeMap = {};
-
-      // Initialize nodes from feedstock status
-      Object.entries(feedstockStatus).forEach(([nodeId]) => {
-        nodeMap[nodeId] = { incoming: [], outgoing: [] };
-      });
-
-      // Build edges from feedstock status
-      Object.entries(feedstockStatus).forEach(([nodeId, data]) => {
-        if (data.immediate_children && Array.isArray(data.immediate_children)) {
-          data.immediate_children.forEach((childId) => {
-            if (feedstockStatus[childId]) {
-              const edgeId = `${nodeId}->${childId}`;
-              edgeMap[edgeId] = { source: nodeId, target: childId };
-              nodeMap[nodeId].outgoing.push(edgeId);
-              nodeMap[childId].incoming.push(edgeId);
-            }
-          });
-        }
-      });
-
-      // Use utility functions to find ancestors and descendants
+    if (selectedNodeId && isZoomedView && allNodeIds.length > 0) {
+      // Use utility functions to find ancestors and descendants from data structure
       const ancestors = findAllAncestors(selectedNodeId, nodeMap, edgeMap);
       const descendants = findAllDescendants(selectedNodeId, nodeMap, edgeMap);
       const visibleNodes = new Set([selectedNodeId, ...ancestors, ...descendants]);
@@ -975,9 +837,9 @@ function ImpactTable({ feedstockStatus, details }) {
         .setDefaultEdgeLabel(() => ({}));
 
       visibleNodes.forEach(nodeName => {
-        const data = feedstockStatus[nodeName];
-        if (data) {
-          const status = data.pr_status || "unknown";
+        const nodeData = nodeMap[nodeName];
+        if (nodeData) {
+          const status = nodeData.data.pr_status || "unknown";
           const label = nodeName;
 
           subgraph.setNode(nodeName, {
@@ -1002,7 +864,7 @@ function ImpactTable({ feedstockStatus, details }) {
 
       setGraph(subgraph);
     }
-  }, [selectedNodeId, isZoomedView, feedstockStatus]);
+  }, [selectedNodeId, isZoomedView, allNodeIds, nodeMap, edgeMap]);
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
