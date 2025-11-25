@@ -546,20 +546,86 @@ function ImpactTable({ feedstockStatus, details }) {
       }
     });
 
-    // Create a new directed graph
-    const g = new dagreD3.graphlib.Graph({ compound: false, directed: true })
+    // === OPTIMIZE LAYOUT: FIND CONNECTED COMPONENTS ===
+    // This helps minimize edge crossings by grouping related packages together
+    const visited = new Set();
+    const components = [];
+
+    const dfs = (nodeId, component, visited) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      component.add(nodeId);
+
+      const data = feedstockStatus[nodeId];
+      if (data) {
+        // Follow outgoing edges
+        if (data.immediate_children && Array.isArray(data.immediate_children)) {
+          data.immediate_children.forEach((child) => {
+            if (feedstockStatus[child] && !mergedPackages.has(child)) {
+              dfs(child, component, visited);
+            }
+          });
+        }
+      }
+
+      // Follow incoming edges (look for parents)
+      Object.entries(feedstockStatus).forEach(([potentialParent, parentData]) => {
+        if (
+          parentData.immediate_children &&
+          parentData.immediate_children.includes(nodeId) &&
+          !mergedPackages.has(potentialParent)
+        ) {
+          dfs(potentialParent, component, visited);
+        }
+      });
+    };
+
+    // Find all connected components
+    nodesWithChildren.forEach((name) => {
+      if (!visited.has(name)) {
+        const component = new Set();
+        dfs(name, component, visited);
+        if (component.size > 0) {
+          components.push(component);
+        }
+      }
+    });
+
+    console.log("Connected components:", components.map(c => Array.from(c)));
+
+    // Create graph with compound structure (subgraphs for each component)
+    const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
       .setGraph({
         nodesep: 50,
         ranksep: 100,
-        rankdir: "TB", // Top to bottom layout (horizontal flow)
+        rankdir: "TB",
       })
       .setDefaultEdgeLabel(() => ({}));
+
+    // Add compound nodes (subgraphs) for each component
+    components.forEach((component, componentIndex) => {
+      const componentId = `component-${componentIndex}`;
+      g.setNode(componentId, {
+        label: "",
+        clusterLabelPos: "top",
+        style: "fill: none; stroke: #ccc; stroke-width: 1px; stroke-dasharray: 5,5;",
+      });
+    });
+
+    // Add nodes to their components
+    const nodeToComponent = {};
+    components.forEach((component, componentIndex) => {
+      component.forEach((nodeId) => {
+        nodeToComponent[nodeId] = `component-${componentIndex}`;
+      });
+    });
 
     // Add nodes only if they have direct children
     nodesWithChildren.forEach((name) => {
       const data = feedstockStatus[name];
       const status = data.pr_status || "unknown";
       const label = `${name}\n(${data.num_descendants} deps)`;
+      const componentId = nodeToComponent[name];
 
       g.setNode(name, {
         label: label,
@@ -569,21 +635,25 @@ function ImpactTable({ feedstockStatus, details }) {
         style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
         labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
       });
+
+      if (componentId) {
+        g.setParent(name, componentId);
+      }
     });
 
-    // Add edges from each feedstock to its immediate children (only if both nodes exist)
+    // Add edges from each feedstock to its immediate children
     nodesWithChildren.forEach((name) => {
       const data = feedstockStatus[name];
 
       if (data.immediate_children && Array.isArray(data.immediate_children)) {
         data.immediate_children.forEach((child) => {
-          // Only add edge if child node exists and wasn't merged
           if (feedstockStatus[child] && !mergedPackages.has(child)) {
             // Add child node if it doesn't exist yet
             if (!g.hasNode(child)) {
               const childData = feedstockStatus[child];
               const childStatus = childData.pr_status || "unknown";
               const childLabel = `${child}\n(${childData.num_descendants} deps)`;
+              const componentId = nodeToComponent[child];
 
               g.setNode(child, {
                 label: childLabel,
@@ -593,6 +663,10 @@ function ImpactTable({ feedstockStatus, details }) {
                 style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
                 labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
               });
+
+              if (componentId) {
+                g.setParent(child, componentId);
+              }
             }
 
             g.setEdge(name, child, {
