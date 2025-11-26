@@ -751,7 +751,6 @@ function ImpactTable({ graphDataStructure, details }) {
                 value={graphDirection}
                 onChange={(e) => {
                   setGraphDirection(e.target.value);
-                  setSelectedNodeId(null);
                 }}
                 style={{
                   padding: "8px 12px",
