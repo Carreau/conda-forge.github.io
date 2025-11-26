@@ -275,10 +275,14 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   // Get related nodes and edges from our data structure
   const outgoingEdgeIds = nodeMap[nodeId]?.outgoing || [];
   const incomingEdgeIds = nodeMap[nodeId]?.incoming || [];
-  const allRelatedEdgeIds = new Set([...outgoingEdgeIds, ...incomingEdgeIds]);
 
-  const childNodeIds = outgoingEdgeIds.map((eid) => edgeMap[eid].target);
-  const parentNodeIds = incomingEdgeIds.map((eid) => edgeMap[eid].source);
+  // Filter to only edge IDs that exist in the current edgeMap
+  const validOutgoingEdgeIds = outgoingEdgeIds.filter(eid => edgeMap[eid]);
+  const validIncomingEdgeIds = incomingEdgeIds.filter(eid => edgeMap[eid]);
+  const allRelatedEdgeIds = new Set([...validOutgoingEdgeIds, ...validIncomingEdgeIds]);
+
+  const childNodeIds = validOutgoingEdgeIds.map((eid) => edgeMap[eid].target);
+  const parentNodeIds = validIncomingEdgeIds.map((eid) => edgeMap[eid].source);
   const highlightNodeIds = new Set([nodeId, ...childNodeIds, ...parentNodeIds]);
 
   // Dim all nodes
@@ -306,7 +310,41 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   });
 };
 
-export const createZoomedGraph = (nodeIdToZoom, graphDataStructure, rankdir = "TB") => {
+export const buildSimpleGraph = (nodeMap, edgeMap, allNodeIds, rankdir = "TB") => {
+  const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
+    .setGraph(getGraphSettings(rankdir))
+    .setDefaultEdgeLabel(() => ({}));
+
+  // Add all nodes without components
+  allNodeIds.forEach((nodeId) => {
+    const nodeInfo = nodeMap[nodeId];
+    if (!nodeInfo) return;
+
+    const status = nodeInfo.data.pr_status || "unknown";
+    g.setNode(nodeId, {
+      label: nodeId,
+      rx: 5,
+      ry: 5,
+      padding: 10,
+      style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+      labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+    });
+  });
+
+  // Add all edges
+  Object.entries(edgeMap).forEach(([edgeId, edge]) => {
+    g.setEdge(edge.source, edge.target, { ...EDGE_STYLE });
+  });
+
+  return g;
+};
+
+export const createZoomedGraphData = (nodeIdToZoom, graphDataStructure) => {
+  if (!nodeIdToZoom) {
+    // No zoom - return the full graph data structure
+    return graphDataStructure;
+  }
+
   const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
 
   // Find all ancestors and descendants using utility functions
@@ -314,40 +352,27 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure, rankdir = "T
   const descendants = findAllDescendants(nodeIdToZoom, graphDataStructure);
   const visibleNodes = new Set([nodeIdToZoom, ...ancestors, ...descendants]);
 
-  // Create new subgraph with only visible nodes
-  const subgraph = new dagreD3.graphlib.Graph({
-    compound: true,
-    directed: true,
-  })
-    .setGraph(getGraphSettings(rankdir))
-    .setDefaultEdgeLabel(() => ({}));
-
-  // Add all visible nodes to the subgraph
-  visibleNodes.forEach((nodeName) => {
-    const nodeInfo = nodeMapData[nodeName];
-    if (nodeInfo) {
-      const status = nodeInfo.data.pr_status || "unknown";
-      const label = nodeName;
-
-      subgraph.setNode(nodeName, {
-        label: label,
-        rx: 5,
-        ry: 5,
-        padding: 10,
-        style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-        labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-      });
+  // Create filtered nodeMap with only visible nodes
+  const filteredNodeMap = {};
+  visibleNodes.forEach((nodeId) => {
+    if (nodeMapData[nodeId]) {
+      filteredNodeMap[nodeId] = nodeMapData[nodeId];
     }
   });
 
-  // Add edges between visible nodes
+  // Create filtered edgeMap with only edges between visible nodes
+  const filteredEdgeMap = {};
   Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
     if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-      subgraph.setEdge(edge.source, edge.target, { ...EDGE_STYLE });
+      filteredEdgeMap[edgeId] = edge;
     }
   });
 
-  return subgraph;
+  return {
+    nodeMap: filteredNodeMap,
+    edgeMap: filteredEdgeMap,
+    allNodeIds: Array.from(visibleNodes),
+  };
 };
 
 export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rankdir = "TB") => {

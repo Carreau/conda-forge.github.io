@@ -15,12 +15,13 @@ import {
   getPrunedFeedstockStatus,
   buildGraphDataStructure,
   buildInitialGraph,
+  buildSimpleGraph,
   getStatusColor,
   getStatusTextColor,
   filterNodesBySearchTerm,
   getAwaitingParentsWithNoParent,
   applyHighlight,
-  createZoomedGraph,
+  createZoomedGraphData,
   getNodeIdFromSvgElement
 } from "./graphUtils";
 
@@ -545,19 +546,30 @@ function ImpactTable({ graphDataStructure, details }) {
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [graphDirection, setGraphDirection] = React.useState("TB");
 
-  const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
+  // Create zoomed graph data based on selected node
+  const zoomedGraphData = React.useMemo(() => {
+    return createZoomedGraphData(selectedNodeId, graphDataStructure);
+  }, [selectedNodeId, graphDataStructure]);
+
+  const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
 
   useEffect(() => {
-    if (!selectedNodeId) {
-      const g = buildInitialGraph(graphDataStructure, graphDirection);
-      setGraph(g);
+    const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
+    let g;
+    if (selectedNodeId) {
+      // Zoomed view - use simple graph without components
+      g = buildSimpleGraph(nodeMap, edgeMap, allNodeIds, graphDirection);
+    } else {
+      // Full view - use graph with components
+      g = buildInitialGraph(zoomedGraphData, graphDirection);
     }
-  }, [graphDataStructure, selectedNodeId, graphDirection]);
+    setGraph(g);
+  }, [zoomedGraphData, graphDirection, selectedNodeId]);
 
-  // Filter nodes based on search term
+  // Filter nodes based on search term (use original graphDataStructure for search)
   const filteredNodes = React.useMemo(() => {
-    return filterNodesBySearchTerm(allNodeIds, searchTerm);
-  }, [searchTerm, allNodeIds]);
+    return filterNodesBySearchTerm(graphDataStructure.allNodeIds, searchTerm);
+  }, [searchTerm, graphDataStructure.allNodeIds]);
 
   // Identify nodes in "awaiting-parents" that have no parents in the graph
   const awaitingParentsNoParent = React.useMemo(() => {
@@ -610,16 +622,12 @@ function ImpactTable({ graphDataStructure, details }) {
     svgGroup.selectAll("g.node").style("cursor", "pointer");
 
     svgGroup.selectAll("g.node").on("mouseenter", function () {
-      if (!selectedNodeId) {
-        const nodeId = d3.select(this).attr("data-node-id");
-        applyHighlight(svgGroup, nodeId, graphDataStructure);
-      }
+      const nodeId = d3.select(this).attr("data-node-id");
+      applyHighlight(svgGroup, nodeId, zoomedGraphData);
     });
 
     svgGroup.selectAll("g.node").on("mouseleave", function () {
-      if (!selectedNodeId) {
-        applyHighlight(svgGroup, null, graphDataStructure);
-      }
+      applyHighlight(svgGroup, null, zoomedGraphData);
     });
 
     svgGroup.selectAll("g.node").on("click", function () {
@@ -627,21 +635,17 @@ function ImpactTable({ graphDataStructure, details }) {
 
       if (selectedNodeId === nodeId && selectedNodeId !== null) {
         setSelectedNodeId(null);
-        setGraph(buildInitialGraph(graphDataStructure, graphDirection));
         return;
       }
 
       setSelectedNodeId(nodeId);
-      const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure, graphDirection);
-      setGraph(zoomedGraph);
     });
 
     // Click on background (void) to reset view
     svg.on("click", function (event) {
       if (event.target === this) {
         setSelectedNodeId(null);
-        setGraph(buildInitialGraph(graphDataStructure, graphDirection));
-        applyHighlight(svgGroup, null, graphDataStructure);
+        applyHighlight(svgGroup, null, zoomedGraphData);
       }
     });
 
@@ -674,12 +678,10 @@ function ImpactTable({ graphDataStructure, details }) {
         .translate(initialTranslate[0], initialTranslate[1])
         .scale(initialScale)
     );
-  }, [graph, selectedNodeId, awaitingParentsNoParent]);
+  }, [graph, selectedNodeId, awaitingParentsNoParent, zoomedGraphData]);
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
-    const zoomedGraph = createZoomedGraph(nodeName, graphDataStructure, graphDirection);
-    setGraph(zoomedGraph);
     setSearchTerm("");
     setShowDropdown(false);
   };
