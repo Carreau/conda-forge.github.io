@@ -12,6 +12,12 @@ const DEFAULT_GRAPH_SETTINGS = {
   rankdir: "TB",
 };
 
+export const getGraphSettings = (rankdir = "TB") => ({
+  nodesep: 50,
+  ranksep: 100,
+  rankdir: rankdir,
+});
+
 const EDGE_STYLE = {
   arrowheadStyle: "fill: #333;",
   style: "stroke: #333; stroke-width: 2px;",
@@ -231,7 +237,7 @@ export const buildGraphDataStructure = (feedstockStatus) => {
   };
 };
 
-export const buildInitialGraph = (graphDataStructure) => {
+export const buildInitialGraph = (graphDataStructure, rankdir = "TB") => {
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
   // Identify nodes that have direct children using nodeMap
@@ -249,7 +255,7 @@ export const buildInitialGraph = (graphDataStructure) => {
   );
 
   // Build and return the graph using the data structure
-  return buildGraph(nodeMap, edgeMap, components, nodesWithChildren);
+  return buildGraph(nodeMap, edgeMap, components, nodesWithChildren, rankdir);
 };
 
 export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
@@ -300,7 +306,7 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   });
 };
 
-export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
+export const createZoomedGraph = (nodeIdToZoom, graphDataStructure, rankdir = "TB") => {
   const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
 
   // Find all ancestors and descendants using utility functions
@@ -313,7 +319,7 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
     compound: true,
     directed: true,
   })
-    .setGraph(DEFAULT_GRAPH_SETTINGS)
+    .setGraph(getGraphSettings(rankdir))
     .setDefaultEdgeLabel(() => ({}));
 
   // Add all visible nodes to the subgraph
@@ -344,9 +350,9 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
   return subgraph;
 };
 
-export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
+export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rankdir = "TB") => {
   const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-    .setGraph(DEFAULT_GRAPH_SETTINGS)
+    .setGraph(getGraphSettings(rankdir))
     .setDefaultEdgeLabel(() => ({}));
 
   // Add compound nodes (subgraphs) for each component

@@ -543,15 +543,16 @@ function ImpactTable({ graphDataStructure, details }) {
   const [selectedNodeId, setSelectedNodeId] = React.useState(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [showDropdown, setShowDropdown] = React.useState(false);
+  const [graphDirection, setGraphDirection] = React.useState("TB");
 
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
   useEffect(() => {
     if (!selectedNodeId) {
-      const g = buildInitialGraph(graphDataStructure);
+      const g = buildInitialGraph(graphDataStructure, graphDirection);
       setGraph(g);
     }
-  }, [graphDataStructure, selectedNodeId]);
+  }, [graphDataStructure, selectedNodeId, graphDirection]);
 
   // Filter nodes based on search term
   const filteredNodes = React.useMemo(() => {
@@ -626,12 +627,12 @@ function ImpactTable({ graphDataStructure, details }) {
 
       if (selectedNodeId === nodeId && selectedNodeId !== null) {
         setSelectedNodeId(null);
-        setGraph(buildInitialGraph(graphDataStructure));
+        setGraph(buildInitialGraph(graphDataStructure, graphDirection));
         return;
       }
 
       setSelectedNodeId(nodeId);
-      const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
+      const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure, graphDirection);
       setGraph(zoomedGraph);
     });
 
@@ -639,7 +640,7 @@ function ImpactTable({ graphDataStructure, details }) {
     svg.on("click", function (event) {
       if (event.target === this) {
         setSelectedNodeId(null);
-        setGraph(buildInitialGraph(graphDataStructure));
+        setGraph(buildInitialGraph(graphDataStructure, graphDirection));
         applyHighlight(svgGroup, null, graphDataStructure);
       }
     });
@@ -677,7 +678,7 @@ function ImpactTable({ graphDataStructure, details }) {
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
-    const zoomedGraph = createZoomedGraph(nodeName, graphDataStructure);
+    const zoomedGraph = createZoomedGraph(nodeName, graphDataStructure, graphDirection);
     setGraph(zoomedGraph);
     setSearchTerm("");
     setShowDropdown(false);
@@ -688,63 +689,91 @@ function ImpactTable({ graphDataStructure, details }) {
       <div className={styles.graphHeader}>
         <div style={{ position: "relative" }}>
           <h3>Feedstock Impact Graph</h3>
-          <div style={{ position: "relative", width: "300px" }}>
-            <input
-              type="text"
-              placeholder="Search for package..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setShowDropdown(true);
-              }}
-              onFocus={() => setShowDropdown(true)}
-              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-              style={{
-                padding: "8px 12px",
-                fontSize: "14px",
-                borderRadius: "4px",
-                border: "1px solid var(--ifm-color-emphasis-300)",
-                marginTop: "8px",
-                width: "100%",
-                boxSizing: "border-box"
-              }}
-            />
-            {showDropdown && filteredNodes.length > 0 && (
-              <ul
+          <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+            <div style={{ position: "relative", width: "300px" }}>
+              <input
+                type="text"
+                placeholder="Search for package..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                 style={{
-                  position: "absolute",
-                  top: "100%",
-                  left: 0,
-                  right: 0,
+                  padding: "8px 12px",
+                  fontSize: "14px",
+                  borderRadius: "4px",
                   border: "1px solid var(--ifm-color-emphasis-300)",
-                  borderTop: "none",
-                  borderRadius: "0 0 4px 4px",
+                  marginTop: "8px",
+                  width: "100%",
+                  boxSizing: "border-box"
+                }}
+              />
+              {showDropdown && filteredNodes.length > 0 && (
+                <ul
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    border: "1px solid var(--ifm-color-emphasis-300)",
+                    borderTop: "none",
+                    borderRadius: "0 0 4px 4px",
+                    backgroundColor: "var(--ifm-color-emphasis-0)",
+                    listStyle: "none",
+                    margin: 0,
+                    padding: "8px 0",
+                    maxHeight: "200px",
+                    overflowY: "auto",
+                    zIndex: 1000
+                  }}
+                >
+                  {filteredNodes.slice(0, 10).map((nodeName) => (
+                    <li
+                      key={nodeName}
+                      onClick={() => handleSelectNode(nodeName)}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        hover: { backgroundColor: "var(--ifm-color-emphasis-100)" }
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = "var(--ifm-color-emphasis-100)"}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
+                    >
+                      {nodeName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div style={{ position: "relative", width: "180px" }}>
+              <select
+                id="graph-direction"
+                value={graphDirection}
+                onChange={(e) => {
+                  setGraphDirection(e.target.value);
+                  setSelectedNodeId(null);
+                }}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: "14px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--ifm-color-emphasis-300)",
+                  marginTop: "8px",
+                  width: "100%",
+                  boxSizing: "border-box",
                   backgroundColor: "var(--ifm-color-emphasis-0)",
-                  listStyle: "none",
-                  margin: 0,
-                  padding: "8px 0",
-                  maxHeight: "200px",
-                  overflowY: "auto",
-                  zIndex: 1000
+                  cursor: "pointer"
                 }}
               >
-                {filteredNodes.slice(0, 10).map((nodeName) => (
-                  <li
-                    key={nodeName}
-                    onClick={() => handleSelectNode(nodeName)}
-                    style={{
-                      padding: "8px 12px",
-                      cursor: "pointer",
-                      hover: { backgroundColor: "var(--ifm-color-emphasis-100)" }
-                    }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = "var(--ifm-color-emphasis-100)"}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
-                  >
-                    {nodeName}
-                  </li>
-                ))}
-              </ul>
-            )}
+                <option value="TB">Top to Bottom</option>
+                <option value="BT">Bottom to Top</option>
+                <option value="LR">Left to Right</option>
+                <option value="RL">Right to Left</option>
+              </select>
+            </div>
           </div>
         </div>
         <span className={styles.instructions}>Click on node to zoom, click on background to reset view</span>
