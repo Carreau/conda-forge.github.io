@@ -288,7 +288,7 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
 };
 
 export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
-  const { nodeMap, edgeMap } = graphDataStructure;
+  const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
 
   // Find all related nodes (self, ancestors, and descendants)
   const visibleNodes = findRelatedNodes(nodeIdToZoom, graphDataStructure);
@@ -300,7 +300,7 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
 
   // Add all visible nodes to the subgraph
   visibleNodes.forEach(nodeName => {
-    const nodeInfo = nodeMap[nodeName];
+    const nodeInfo = nodeMapData[nodeName];
     if (nodeInfo) {
       const status = nodeInfo.data.pr_status || "unknown";
       subgraph.setNode(nodeName, createNodeStyle(nodeName, status));
@@ -308,9 +308,12 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
   });
 
   // Add edges between visible nodes
-  Object.entries(edgeMap).forEach(([edgeId, edge]) => {
+  Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
     if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-      subgraph.setEdge(edge.source, edge.target, EDGE_STYLE);
+      subgraph.setEdge(edge.source, edge.target, {
+        arrowheadStyle: "fill: #333;",
+        style: "stroke: #333; stroke-width: 2px;",
+      });
     }
   });
 
