@@ -19,9 +19,6 @@ import {
   getStatusTextColor,
   filterNodesBySearchTerm,
   getAwaitingParentsWithNoParent,
-  findAllAncestors,
-  findAllDescendants,
-  buildGraph,
   applyHighlight,
   createZoomedGraph,
   getNodeIdFromSvgElement
