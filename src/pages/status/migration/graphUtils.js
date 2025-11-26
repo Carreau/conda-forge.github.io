@@ -12,6 +12,11 @@ const DEFAULT_GRAPH_SETTINGS = {
   rankdir: "TB",
 };
 
+const EDGE_STYLE = {
+  arrowheadStyle: "fill: #333;",
+  style: "stroke: #333; stroke-width: 2px;",
+};
+
 // Helper function to extract node ID from SVG element
 export const getNodeIdFromSvgElement = (element) => {
   const fullText = d3.select(element).select("text").text().split("\n")[0];
@@ -304,10 +309,7 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
   // Add edges between visible nodes
   Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
     if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-      subgraph.setEdge(edge.source, edge.target, {
-        arrowheadStyle: "fill: #333;",
-        style: "stroke: #333; stroke-width: 2px;",
-      });
+      subgraph.setEdge(edge.source, edge.target, EDGE_STYLE);
     }
   });
 
@@ -397,10 +399,7 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
       }
 
       // Add edge
-      g.setEdge(name, childId, {
-        arrowheadStyle: "fill: #333;",
-        style: "stroke: #333; stroke-width: 2px;",
-      });
+      g.setEdge(name, childId);
     });
   });
 
