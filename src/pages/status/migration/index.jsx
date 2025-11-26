@@ -15,7 +15,6 @@ import {
   getPrunedFeedstockStatus,
   buildGraphDataStructure,
   buildInitialGraph,
-  buildSimpleGraph,
   getStatusColor,
   getStatusTextColor,
   filterNodesBySearchTerm,
@@ -554,16 +553,9 @@ function ImpactTable({ graphDataStructure, details }) {
   const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
 
   useEffect(() => {
-    let g;
-    if (selectedNodeId) {
-      // Zoomed view - use simple graph without components
-      g = buildSimpleGraph(zoomedGraphData, graphDirection);
-    } else {
-      // Full view - use graph with components
-      g = buildInitialGraph(zoomedGraphData, graphDirection);
-    }
+    const g = buildInitialGraph(zoomedGraphData, graphDirection);
     setGraph(g);
-  }, [zoomedGraphData, graphDirection, selectedNodeId]);
+  }, [zoomedGraphData, graphDirection]);
 
   // Filter nodes based on search term (use original graphDataStructure for search)
   const filteredNodes = React.useMemo(() => {
