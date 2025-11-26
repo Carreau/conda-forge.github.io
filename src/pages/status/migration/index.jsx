@@ -547,11 +547,13 @@ function ImpactTable({ graphDataStructure, details }) {
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
   // Build dagre graph for rendering from data structure
+  // Build initial graph when graphDataStructure changes or when resetting view
   useEffect(() => {
-    // Build dagre graph from data structure
-    const g = buildInitialGraph(graphDataStructure);
-    setGraph(g);
-  }, [graphDataStructure]);
+    if (!selectedNodeId) {
+      const g = buildInitialGraph(graphDataStructure);
+      setGraph(g);
+    }
+  }, [graphDataStructure, selectedNodeId]);
 
   // Filter nodes based on search term
   const filteredNodes = React.useMemo(() => {
@@ -692,20 +694,12 @@ function ImpactTable({ graphDataStructure, details }) {
     );
   }, [graph, selectedNodeId, awaitingParentsNoParent]);
 
-  // Handle zoom when node is selected from dropdown
-  useEffect(() => {
-    if (selectedNodeId) {
-      const subgraph = createZoomedGraph(selectedNodeId, graphDataStructure);
-      setGraph(subgraph);
-    }
-  }, [selectedNodeId, graphDataStructure]);
-
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
+    const zoomedGraph = createZoomedGraph(nodeName, graphDataStructure);
+    setGraph(zoomedGraph);
     setSearchTerm("");
     setShowDropdown(false);
-    // Trigger a click simulation on the node by updating graph
-    // This will be handled by the effect that watches selectedNodeId
   };
 
   return (
