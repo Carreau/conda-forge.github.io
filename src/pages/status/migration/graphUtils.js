@@ -69,15 +69,12 @@ export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
   const noParents = new Set();
   const allChildren = new Set();
 
-  Object.entries(nodeMap).forEach(([nodeId, nodeInfo]) => {
-    if (nodeInfo.outgoing && nodeInfo.outgoing.length > 0) {
-      nodeInfo.outgoing.forEach((edgeId) => {
-        const target = edgeId.split("->")[1];
-        if (target) {
-          allChildren.add(target);
-        }
-      });
-    }
+  // Collect all nodes that are children of any node
+  Object.values(nodeMap).forEach((nodeInfo) => {
+    const children = nodeInfo.data?.immediate_children || [];
+    children.forEach((childId) => {
+      allChildren.add(childId);
+    });
   });
 
   // Find packages in awaiting-parents that are not children of any node
@@ -138,12 +135,24 @@ export const findAllDescendants = (nodeId, graphDataStructure) => {
 };
 
 export const findConnectedComponents = (
-  nodeMap,
-  edgeMap,
+  graphDataStructure,
   nodesWithChildren,
 ) => {
+  const { nodeMap } = graphDataStructure;
   const visited = new Set();
   const components = [];
+
+  // Build parent map for efficient parent lookup
+  const parentMap = {}; // childId -> [parentId1, parentId2, ...]
+  Object.entries(nodeMap).forEach(([nodeId, nodeInfo]) => {
+    const children = nodeInfo.data?.immediate_children || [];
+    children.forEach((childId) => {
+      if (!parentMap[childId]) {
+        parentMap[childId] = [];
+      }
+      parentMap[childId].push(nodeId);
+    });
+  });
 
   const dfs = (nodeId, component, visited) => {
     if (visited.has(nodeId)) return;
@@ -152,21 +161,19 @@ export const findConnectedComponents = (
 
     const nodeInfo = nodeMap[nodeId];
     if (nodeInfo) {
-      // Follow outgoing edges (children)
-      if (nodeInfo.outgoing && nodeInfo.outgoing.length > 0) {
-        nodeInfo.outgoing.forEach((edgeId) => {
-          const childId = edgeMap[edgeId].target;
+      // Follow children
+      const children = nodeInfo.data?.immediate_children || [];
+      children.forEach((childId) => {
+        if (nodeMap[childId]) {
           dfs(childId, component, visited);
-        });
-      }
+        }
+      });
 
-      // Follow incoming edges (parents)
-      if (nodeInfo.incoming && nodeInfo.incoming.length > 0) {
-        nodeInfo.incoming.forEach((edgeId) => {
-          const parentId = edgeMap[edgeId].source;
-          dfs(parentId, component, visited);
-        });
-      }
+      // Follow parents using the parent map
+      const parents = parentMap[nodeId] || [];
+      parents.forEach((parentId) => {
+        dfs(parentId, component, visited);
+      });
     }
   };
 
@@ -237,8 +244,7 @@ export const buildInitialGraph = (graphDataStructure) => {
 
   // Find connected components using the data structure
   const components = findConnectedComponents(
-    nodeMap,
-    edgeMap,
+    graphDataStructure,
     nodesWithChildren,
   );
 
