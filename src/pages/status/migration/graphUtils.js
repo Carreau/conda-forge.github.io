@@ -309,7 +309,7 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
   // Add edges between visible nodes
   Object.entries(edgeMapData).forEach(([edgeId, edge]) => {
     if (visibleNodes.has(edge.source) && visibleNodes.has(edge.target)) {
-      subgraph.setEdge(edge.source, edge.target, EDGE_STYLE);
+      subgraph.setEdge(edge.source, edge.target, { ...EDGE_STYLE });
     }
   });
 
@@ -399,7 +399,7 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
       }
 
       // Add edge
-      g.setEdge(name, childId);
+      g.setEdge(name, childId, { ...EDGE_STYLE });
     });
   });
 
