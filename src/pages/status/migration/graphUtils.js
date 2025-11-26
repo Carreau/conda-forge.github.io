@@ -310,7 +310,9 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   });
 };
 
-export const buildSimpleGraph = (nodeMap, edgeMap, allNodeIds, rankdir = "TB") => {
+export const buildSimpleGraph = (graphData, rankdir = "TB") => {
+  const { nodeMap, edgeMap, allNodeIds } = graphData;
+
   const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
     .setGraph(getGraphSettings(rankdir))
     .setDefaultEdgeLabel(() => ({}));

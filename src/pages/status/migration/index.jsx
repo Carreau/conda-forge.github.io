@@ -554,11 +554,10 @@ function ImpactTable({ graphDataStructure, details }) {
   const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
 
   useEffect(() => {
-    const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
     let g;
     if (selectedNodeId) {
       // Zoomed view - use simple graph without components
-      g = buildSimpleGraph(nodeMap, edgeMap, allNodeIds, graphDirection);
+      g = buildSimpleGraph(zoomedGraphData, graphDirection);
     } else {
       // Full view - use graph with components
       g = buildInitialGraph(zoomedGraphData, graphDirection);
