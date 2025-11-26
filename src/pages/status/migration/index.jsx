@@ -546,8 +546,6 @@ function ImpactTable({ graphDataStructure, details }) {
 
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
-  // Build dagre graph for rendering from data structure
-  // Build initial graph when graphDataStructure changes or when resetting view
   useEffect(() => {
     if (!selectedNodeId) {
       const g = buildInitialGraph(graphDataStructure);
@@ -568,21 +566,14 @@ function ImpactTable({ graphDataStructure, details }) {
   useEffect(() => {
     if (!graph || !svgRef.current) return;
 
-    // Clear previous content
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    // Create SVG group and set up zoom
     const svgGroup = svg.append("g");
 
-    // Create the renderer
     const render = new dagreD3.render();
-
-    // Run the renderer
     render(svgGroup, graph);
 
-    // === ASSOCIATE SVG ELEMENTS WITH DATA ===
-    // Add data attributes to SVG elements so we can find them later
     svgGroup.selectAll("g.node").each(function () {
       const nodeId = getNodeIdFromSvgElement(this);
       d3.select(this).attr("data-node-id", nodeId);
@@ -603,11 +594,9 @@ function ImpactTable({ graphDataStructure, details }) {
       }
     });
 
-    // Add data attributes to edge elements
     let edgeIndex = 0;
     const edgeIdMap = {}; // Map SVG element index to edge id
     svgGroup.selectAll("g.edgePath").each(function () {
-      // Try to match by looking at visual position or order
       const edgeIds = Object.keys(edgeMap);
       if (edgeIndex < edgeIds.length) {
         const edgeId = edgeIds[edgeIndex];
@@ -617,11 +606,9 @@ function ImpactTable({ graphDataStructure, details }) {
       edgeIndex++;
     });
 
-    // === HOVER AND CLICK HANDLERS ===
     svgGroup.selectAll("g.node").style("cursor", "pointer");
 
     svgGroup.selectAll("g.node").on("mouseenter", function () {
-      // Only apply hover highlight if no node is selected
       if (!selectedNodeId) {
         const nodeId = d3.select(this).attr("data-node-id");
         applyHighlight(svgGroup, nodeId, graphDataStructure);
@@ -629,7 +616,6 @@ function ImpactTable({ graphDataStructure, details }) {
     });
 
     svgGroup.selectAll("g.node").on("mouseleave", function () {
-      // Only reset if no node is selected
       if (!selectedNodeId) {
         applyHighlight(svgGroup, null, graphDataStructure);
       }
@@ -638,15 +624,12 @@ function ImpactTable({ graphDataStructure, details }) {
     svgGroup.selectAll("g.node").on("click", function () {
       const nodeId = d3.select(this).attr("data-node-id");
 
-      // Toggle selection
       if (selectedNodeId === nodeId && selectedNodeId !== null) {
-        // If clicking the same node while zoomed, go back to full view
         setSelectedNodeId(null);
         setGraph(buildInitialGraph(graphDataStructure));
         return;
       }
 
-      // New selection or re-selection
       setSelectedNodeId(nodeId);
       const zoomedGraph = createZoomedGraph(nodeId, graphDataStructure);
       setGraph(zoomedGraph);
@@ -654,7 +637,6 @@ function ImpactTable({ graphDataStructure, details }) {
 
     // Click on background (void) to reset view
     svg.on("click", function (event) {
-      // Check if click was on the background (SVG element itself), not on a child node
       if (event.target === this) {
         setSelectedNodeId(null);
         setGraph(buildInitialGraph(graphDataStructure));
@@ -662,7 +644,6 @@ function ImpactTable({ graphDataStructure, details }) {
       }
     });
 
-    // Setup zoom behavior
     const zoom = d3.zoom().on("zoom", (event) => {
       svgGroup.attr("transform", event.transform);
     });

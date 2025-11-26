@@ -23,6 +23,7 @@ export const getNodeIdFromSvgElement = (element) => {
   return fullText.split("(")[0].trim();
 };
 
+// Remove any done node for a smaller graph
 export const getPrunedFeedstockStatus = (feedstockStatus, details) => {
   if (!feedstockStatus || !details?.done) return feedstockStatus;
 
@@ -57,22 +58,21 @@ export const getStatusTextColor = (prStatus) => {
 
 export const filterNodesBySearchTerm = (nodeNames, searchTerm) => {
   if (!searchTerm) return [];
-  return nodeNames.filter(name =>
-    name.toLowerCase().includes(searchTerm.toLowerCase())
+  return nodeNames.filter((name) =>
+    name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 };
 
+// some node are awaiting parent, but have no current parent in the graph
+// eg.pyside2 on 3.14t I'm guessing this is awaiting external changes (PyPI?)
 export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
   const noParents = new Set();
   const allChildren = new Set();
 
-  // Build set of all children in the graph using nodeMap
   Object.entries(nodeMap).forEach(([nodeId, nodeInfo]) => {
     if (nodeInfo.outgoing && nodeInfo.outgoing.length > 0) {
-      // Node has outgoing edges, collect all targets
-      nodeInfo.outgoing.forEach(edgeId => {
-        // Extract target from edgeId (format: "source->target")
-        const target = edgeId.split('->')[1];
+      nodeInfo.outgoing.forEach((edgeId) => {
+        const target = edgeId.split("->")[1];
         if (target) {
           allChildren.add(target);
         }
@@ -82,7 +82,7 @@ export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
 
   // Find packages in awaiting-parents that are not children of any node
   const awaitingParents = details?.["awaiting-parents"] || [];
-  awaitingParents.forEach(name => {
+  awaitingParents.forEach((name) => {
     if (!allChildren.has(name)) {
       noParents.add(name);
     }
@@ -101,7 +101,7 @@ export const findAllAncestors = (nodeId, graphDataStructure) => {
     const current = queue.shift();
     const incomingEdges = nodeMap[current]?.incoming || [];
 
-    incomingEdges.forEach(eid => {
+    incomingEdges.forEach((eid) => {
       const parentId = edgeMap[eid].source;
       if (!visited.has(parentId)) {
         visited.add(parentId);
@@ -124,7 +124,7 @@ export const findAllDescendants = (nodeId, graphDataStructure) => {
     const current = queue.shift();
     const outgoingEdges = nodeMap[current]?.outgoing || [];
 
-    outgoingEdges.forEach(eid => {
+    outgoingEdges.forEach((eid) => {
       const childId = edgeMap[eid].target;
       if (!visited.has(childId)) {
         visited.add(childId);
@@ -137,7 +137,11 @@ export const findAllDescendants = (nodeId, graphDataStructure) => {
   return descendants;
 };
 
-export const findConnectedComponents = (nodeMap, edgeMap, nodesWithChildren) => {
+export const findConnectedComponents = (
+  nodeMap,
+  edgeMap,
+  nodesWithChildren,
+) => {
   const visited = new Set();
   const components = [];
 
@@ -188,11 +192,11 @@ export const buildGraphDataStructure = (feedstockStatus) => {
   const edgeMap = {};
 
   // Initialize all nodes
-  Object.keys(feedstockStatus).forEach(nodeId => {
+  Object.keys(feedstockStatus).forEach((nodeId) => {
     nodeMap[nodeId] = {
       data: feedstockStatus[nodeId],
       incoming: [],
-      outgoing: []
+      outgoing: [],
     };
   });
 
@@ -204,7 +208,7 @@ export const buildGraphDataStructure = (feedstockStatus) => {
           const edgeId = `${nodeId}->${childId}`;
           edgeMap[edgeId] = {
             source: nodeId,
-            target: childId
+            target: childId,
           };
           nodeMap[nodeId].outgoing.push(edgeId);
           nodeMap[childId].incoming.push(edgeId);
@@ -216,7 +220,7 @@ export const buildGraphDataStructure = (feedstockStatus) => {
   return {
     nodeMap,
     edgeMap,
-    allNodeIds: Object.keys(nodeMap)
+    allNodeIds: Object.keys(nodeMap),
   };
 };
 
@@ -225,14 +229,18 @@ export const buildInitialGraph = (graphDataStructure) => {
 
   // Identify nodes that have direct children using nodeMap
   const nodesWithChildren = new Set();
-  allNodeIds.forEach(nodeId => {
+  allNodeIds.forEach((nodeId) => {
     if (nodeMap[nodeId].outgoing && nodeMap[nodeId].outgoing.length > 0) {
       nodesWithChildren.add(nodeId);
     }
   });
 
   // Find connected components using the data structure
-  const components = findConnectedComponents(nodeMap, edgeMap, nodesWithChildren);
+  const components = findConnectedComponents(
+    nodeMap,
+    edgeMap,
+    nodesWithChildren,
+  );
 
   // Build and return the graph using the data structure
   return buildGraph(nodeMap, edgeMap, components, nodesWithChildren);
@@ -245,7 +253,8 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
     // Clear all highlights
     svgGroup.selectAll("g.node").style("opacity", 1);
     svgGroup.selectAll("g.edgePath").style("opacity", 1);
-    svgGroup.selectAll("g.edgePath path")
+    svgGroup
+      .selectAll("g.edgePath path")
       .style("stroke", "#333")
       .style("stroke-width", "2px");
     return;
@@ -256,8 +265,8 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
   const incomingEdgeIds = nodeMap[nodeId]?.incoming || [];
   const allRelatedEdgeIds = new Set([...outgoingEdgeIds, ...incomingEdgeIds]);
 
-  const childNodeIds = outgoingEdgeIds.map(eid => edgeMap[eid].target);
-  const parentNodeIds = incomingEdgeIds.map(eid => edgeMap[eid].source);
+  const childNodeIds = outgoingEdgeIds.map((eid) => edgeMap[eid].target);
+  const parentNodeIds = incomingEdgeIds.map((eid) => edgeMap[eid].source);
   const highlightNodeIds = new Set([nodeId, ...childNodeIds, ...parentNodeIds]);
 
   // Dim all nodes
@@ -294,12 +303,15 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
   const visibleNodes = new Set([nodeIdToZoom, ...ancestors, ...descendants]);
 
   // Create new subgraph with only visible nodes
-  const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
+  const subgraph = new dagreD3.graphlib.Graph({
+    compound: true,
+    directed: true,
+  })
     .setGraph(DEFAULT_GRAPH_SETTINGS)
     .setDefaultEdgeLabel(() => ({}));
 
   // Add all visible nodes to the subgraph
-  visibleNodes.forEach(nodeName => {
+  visibleNodes.forEach((nodeName) => {
     const nodeInfo = nodeMapData[nodeName];
     if (nodeInfo) {
       const status = nodeInfo.data.pr_status || "unknown";
@@ -337,7 +349,8 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
     g.setNode(componentId, {
       label: "",
       clusterLabelPos: "top",
-      style: "fill: none; stroke: #ccc; stroke-width: 1px; stroke-dasharray: 5,5;",
+      style:
+        "fill: none; stroke: #ccc; stroke-width: 1px; stroke-dasharray: 5,5;",
     });
   });
 
