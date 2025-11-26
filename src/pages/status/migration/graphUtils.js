@@ -12,10 +12,11 @@ const DEFAULT_GRAPH_SETTINGS = {
   rankdir: "TB",
 };
 
-export const getGraphSettings = (rankdir = "TB") => ({
+export const getGraphSettings = (rankdir = "TB", ranker = "network-simplex") => ({
   nodesep: 50,
   ranksep: 100,
   rankdir: rankdir,
+  ranker: ranker,
 });
 
 const EDGE_STYLE = {
@@ -237,7 +238,7 @@ export const buildGraphDataStructure = (feedstockStatus) => {
   };
 };
 
-export const buildInitialGraph = (graphDataStructure, rankdir = "TB") => {
+export const buildInitialGraph = (graphDataStructure, rankdir = "TB", ranker = "network-simplex") => {
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
   // Identify nodes that have direct children using nodeMap
@@ -255,7 +256,7 @@ export const buildInitialGraph = (graphDataStructure, rankdir = "TB") => {
   );
 
   // Build and return the graph using the data structure
-  return buildGraph(nodeMap, edgeMap, components, nodesWithChildren, rankdir);
+  return buildGraph(nodeMap, edgeMap, components, nodesWithChildren, rankdir, ranker);
 };
 
 export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
@@ -349,9 +350,9 @@ export const createZoomedGraphData = (nodeIdToZoom, graphDataStructure) => {
   };
 };
 
-export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rankdir = "TB") => {
+export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rankdir = "TB", ranker = "network-simplex") => {
   const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
-    .setGraph(getGraphSettings(rankdir))
+    .setGraph(getGraphSettings(rankdir, ranker))
     .setDefaultEdgeLabel(() => ({}));
 
   // Add compound nodes (subgraphs) for each component

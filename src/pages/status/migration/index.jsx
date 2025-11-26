@@ -544,6 +544,7 @@ function ImpactTable({ graphDataStructure, details }) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [graphDirection, setGraphDirection] = React.useState("TB");
+  const [graphRanker, setGraphRanker] = React.useState("network-simplex");
 
   // Create zoomed graph data based on selected node
   const zoomedGraphData = React.useMemo(() => {
@@ -553,9 +554,9 @@ function ImpactTable({ graphDataStructure, details }) {
   const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
 
   useEffect(() => {
-    const g = buildInitialGraph(zoomedGraphData, graphDirection);
+    const g = buildInitialGraph(zoomedGraphData, graphDirection, graphRanker);
     setGraph(g);
-  }, [zoomedGraphData, graphDirection]);
+  }, [zoomedGraphData, graphDirection, graphRanker]);
 
   // Filter nodes based on search term (use original graphDataStructure for search)
   const filteredNodes = React.useMemo(() => {
@@ -768,6 +769,30 @@ function ImpactTable({ graphDataStructure, details }) {
                 <option value="BT">Bottom to Top</option>
                 <option value="LR">Left to Right</option>
                 <option value="RL">Right to Left</option>
+              </select>
+            </div>
+            <div style={{ position: "relative", width: "180px" }}>
+              <select
+                id="graph-ranker"
+                value={graphRanker}
+                onChange={(e) => {
+                  setGraphRanker(e.target.value);
+                }}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: "14px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--ifm-color-emphasis-300)",
+                  marginTop: "8px",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  backgroundColor: "var(--ifm-color-emphasis-0)",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="network-simplex">Network Simplex</option>
+                <option value="tight-tree">Tight Tree</option>
+                <option value="longest-path">Longest Path</option>
               </select>
             </div>
           </div>
