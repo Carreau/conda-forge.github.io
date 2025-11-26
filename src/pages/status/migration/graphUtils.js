@@ -12,21 +12,6 @@ const DEFAULT_GRAPH_SETTINGS = {
   rankdir: "TB",
 };
 
-const EDGE_STYLE = {
-  arrowheadStyle: "fill: #333;",
-  style: "stroke: #333; stroke-width: 2px;",
-};
-
-// Helper function to create node styling
-const createNodeStyle = (nodeName, status) => ({
-  label: nodeName,
-  rx: 5,
-  ry: 5,
-  padding: 10,
-  style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-  labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-});
-
 // Helper function to extract node ID from SVG element
 export const getNodeIdFromSvgElement = (element) => {
   const fullText = d3.select(element).select("text").text().split("\n")[0];
@@ -303,7 +288,16 @@ export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
     const nodeInfo = nodeMapData[nodeName];
     if (nodeInfo) {
       const status = nodeInfo.data.pr_status || "unknown";
-      subgraph.setNode(nodeName, createNodeStyle(nodeName, status));
+      const label = nodeName;
+
+      subgraph.setNode(nodeName, {
+        label: label,
+        rx: 5,
+        ry: 5,
+        padding: 10,
+        style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+        labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+      });
     }
   });
 
@@ -350,9 +344,17 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
 
     const data = nodeInfo.data;
     const status = data.pr_status || "unknown";
+    const label = name;
     const componentId = nodeToComponent[name];
 
-    g.setNode(name, createNodeStyle(name, status));
+    g.setNode(name, {
+      label: label,
+      rx: 5,
+      ry: 5,
+      padding: 10,
+      style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+      labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+    });
 
     if (componentId) {
       g.setParent(name, componentId);
@@ -375,9 +377,17 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
         // Add the child node if not already added
         const childData = childNodeInfo.data;
         const childStatus = childData.pr_status || "unknown";
+        const childLabel = childId;
         const componentId = nodeToComponent[childId];
 
-        g.setNode(childId, createNodeStyle(childId, childStatus));
+        g.setNode(childId, {
+          label: childLabel,
+          rx: 5,
+          ry: 5,
+          padding: 10,
+          style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
+          labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
+        });
 
         if (componentId) {
           g.setParent(childId, componentId);
@@ -387,7 +397,10 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren) => {
       }
 
       // Add edge
-      g.setEdge(name, childId, EDGE_STYLE);
+      g.setEdge(name, childId, {
+        arrowheadStyle: "fill: #333;",
+        style: "stroke: #333; stroke-width: 2px;",
+      });
     });
   });
 
