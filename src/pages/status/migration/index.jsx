@@ -569,6 +569,11 @@ function ImpactTable({ graphDataStructure, details }) {
   useEffect(() => {
     if (!graph || !svgRef.current) return;
 
+    // === HELPER FUNCTION TO REBUILD GRAPH ===
+    const rebuildOriginalGraph = () => {
+      return buildInitialGraph(graphDataStructure);
+    };
+
     // Clear previous content
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -643,7 +648,7 @@ function ImpactTable({ graphDataStructure, details }) {
       if (selectedNodeId === nodeId && selectedNodeId !== null) {
         // If clicking the same node while zoomed, go back to full view
         setSelectedNodeId(null);
-        setGraph(buildInitialGraph(graphDataStructure));
+        setGraph(rebuildOriginalGraph());
         return;
       }
 
@@ -658,7 +663,7 @@ function ImpactTable({ graphDataStructure, details }) {
       // Check if click was on the background (SVG element itself), not on a child node
       if (event.target === this) {
         setSelectedNodeId(null);
-        setGraph(buildInitialGraph(graphDataStructure));
+        setGraph(rebuildOriginalGraph());
         applyHighlight(svgGroup, null, graphDataStructure);
       }
     });
