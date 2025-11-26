@@ -91,38 +91,50 @@ export const getAwaitingParentsWithNoParent = (nodeMap, details) => {
   return noParents;
 };
 
-export const findRelatedNodes = (nodeId, graphDataStructure) => {
+export const findAllAncestors = (nodeId, graphDataStructure) => {
   const { nodeMap, edgeMap } = graphDataStructure;
+  const ancestors = new Set();
   const queue = [nodeId];
   const visited = new Set([nodeId]);
 
   while (queue.length > 0) {
     const current = queue.shift();
-    const nodeInfo = nodeMap[current];
-    if (!nodeInfo) continue;
+    const incomingEdges = nodeMap[current]?.incoming || [];
 
-    // Process incoming edges (ancestors)
-    const incomingEdges = nodeInfo.incoming || [];
     incomingEdges.forEach(eid => {
       const parentId = edgeMap[eid].source;
       if (!visited.has(parentId)) {
         visited.add(parentId);
+        ancestors.add(parentId);
         queue.push(parentId);
       }
     });
+  }
 
-    // Process outgoing edges (descendants)
-    const outgoingEdges = nodeInfo.outgoing || [];
+  return ancestors;
+};
+
+export const findAllDescendants = (nodeId, graphDataStructure) => {
+  const { nodeMap, edgeMap } = graphDataStructure;
+  const descendants = new Set();
+  const queue = [nodeId];
+  const visited = new Set([nodeId]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const outgoingEdges = nodeMap[current]?.outgoing || [];
+
     outgoingEdges.forEach(eid => {
       const childId = edgeMap[eid].target;
       if (!visited.has(childId)) {
         visited.add(childId);
+        descendants.add(childId);
         queue.push(childId);
       }
     });
   }
 
-  return visited;
+  return descendants;
 };
 
 export const findConnectedComponents = (nodeMap, edgeMap, nodesWithChildren) => {
@@ -276,8 +288,10 @@ export const applyHighlight = (svgGroup, nodeId, graphDataStructure) => {
 export const createZoomedGraph = (nodeIdToZoom, graphDataStructure) => {
   const { nodeMap: nodeMapData, edgeMap: edgeMapData } = graphDataStructure;
 
-  // Find all related nodes (self, ancestors, and descendants)
-  const visibleNodes = findRelatedNodes(nodeIdToZoom, graphDataStructure);
+  // Find all ancestors and descendants using utility functions
+  const ancestors = findAllAncestors(nodeIdToZoom, graphDataStructure);
+  const descendants = findAllDescendants(nodeIdToZoom, graphDataStructure);
+  const visibleNodes = new Set([nodeIdToZoom, ...ancestors, ...descendants]);
 
   // Create new subgraph with only visible nodes
   const subgraph = new dagreD3.graphlib.Graph({ compound: true, directed: true })
