@@ -211,10 +211,6 @@ export const buildGraphDataStructure = (feedstockStatus) => {
 export const buildInitialGraph = (graphDataStructure) => {
   const { nodeMap, edgeMap, allNodeIds } = graphDataStructure;
 
-  if (!allNodeIds || allNodeIds.length === 0) {
-    return null;
-  }
-
   // Identify nodes that have direct children using nodeMap
   const nodesWithChildren = new Set();
   allNodeIds.forEach(nodeId => {
