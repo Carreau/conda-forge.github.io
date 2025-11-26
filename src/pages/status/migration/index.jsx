@@ -559,10 +559,21 @@ function ImpactTable({ graphDataStructure, details }) {
     setGraph(g);
   }, [zoomedGraphData, graphDirection, graphRanker, graphAlign]);
 
-  // Filter nodes based on search term (use original graphDataStructure for search)
+  // Get searchable nodes (only nodes with children or parents)
+  const searchableNodeIds = React.useMemo(() => {
+    return graphDataStructure.allNodeIds.filter(nodeId => {
+      const node = graphDataStructure.nodeMap[nodeId];
+      if (!node) return false;
+      const hasChildren = node.outgoing && node.outgoing.length > 0;
+      const hasParents = node.incoming && node.incoming.length > 0;
+      return hasChildren || hasParents;
+    });
+  }, [graphDataStructure]);
+
+  // Filter nodes based on search term
   const filteredNodes = React.useMemo(() => {
-    return filterNodesBySearchTerm(graphDataStructure.allNodeIds, searchTerm);
-  }, [searchTerm, graphDataStructure.allNodeIds]);
+    return filterNodesBySearchTerm(searchableNodeIds, searchTerm);
+  }, [searchTerm, searchableNodeIds]);
 
   // Identify nodes in "awaiting-parents" that have no parents in the graph
   const awaitingParentsNoParent = React.useMemo(() => {
