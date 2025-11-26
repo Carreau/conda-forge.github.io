@@ -545,6 +545,7 @@ function ImpactTable({ graphDataStructure, details }) {
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [graphDirection, setGraphDirection] = React.useState("TB");
   const [graphRanker, setGraphRanker] = React.useState("network-simplex");
+  const [graphAlign, setGraphAlign] = React.useState("");
 
   // Create zoomed graph data based on selected node
   const zoomedGraphData = React.useMemo(() => {
@@ -554,9 +555,9 @@ function ImpactTable({ graphDataStructure, details }) {
   const { nodeMap, edgeMap, allNodeIds } = zoomedGraphData;
 
   useEffect(() => {
-    const g = buildInitialGraph(zoomedGraphData, graphDirection, graphRanker);
+    const g = buildInitialGraph(zoomedGraphData, graphDirection, graphRanker, graphAlign || undefined);
     setGraph(g);
-  }, [zoomedGraphData, graphDirection, graphRanker]);
+  }, [zoomedGraphData, graphDirection, graphRanker, graphAlign]);
 
   // Filter nodes based on search term (use original graphDataStructure for search)
   const filteredNodes = React.useMemo(() => {
@@ -793,6 +794,32 @@ function ImpactTable({ graphDataStructure, details }) {
                 <option value="network-simplex">Network Simplex</option>
                 <option value="tight-tree">Tight Tree</option>
                 <option value="longest-path">Longest Path</option>
+              </select>
+            </div>
+            <div style={{ position: "relative", width: "180px" }}>
+              <select
+                id="graph-align"
+                value={graphAlign}
+                onChange={(e) => {
+                  setGraphAlign(e.target.value);
+                }}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: "14px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--ifm-color-emphasis-300)",
+                  marginTop: "8px",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  backgroundColor: "var(--ifm-color-emphasis-0)",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="">Center (default)</option>
+                <option value="UL">Upper Left</option>
+                <option value="UR">Upper Right</option>
+                <option value="DL">Down Left</option>
+                <option value="DR">Down Right</option>
               </select>
             </div>
           </div>
