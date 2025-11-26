@@ -351,6 +351,32 @@ export const createZoomedGraphData = (nodeIdToZoom, graphDataStructure) => {
   };
 };
 
+// Helper function to add a node to the graph
+const addNodeToGraph = (g, nodeId, nodeMap, nodeToComponent, addedNodes) => {
+  if (addedNodes.has(nodeId)) return;
+
+  const nodeInfo = nodeMap[nodeId];
+  if (!nodeInfo) return;
+
+  const status = nodeInfo.data.pr_status || "unknown";
+  const componentId = nodeToComponent[nodeId];
+
+  g.setNode(nodeId, {
+    label: nodeId,
+    rx: 5,
+    ry: 5,
+    padding: 10,
+    style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
+    labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
+  });
+
+  if (componentId) {
+    g.setParent(nodeId, componentId);
+  }
+
+  addedNodes.add(nodeId);
+};
+
 export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rankdir = "TB", ranker = "network-simplex", align = undefined) => {
   const g = new dagreD3.graphlib.Graph({ compound: true, directed: true })
     .setGraph(getGraphSettings(rankdir, ranker, align))
@@ -375,64 +401,23 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rank
     });
   });
 
-  // Add nodes only if they have direct children
+  // Add all nodes and edges in a single pass
+  const addedNodes = new Set();
+
+  // Process all nodes with children
   nodesWithChildren.forEach((name) => {
+    // Add the parent node
+    addNodeToGraph(g, name, nodeMap, nodeToComponent, addedNodes);
+
     const nodeInfo = nodeMap[name];
     if (!nodeInfo) return;
 
-    const data = nodeInfo.data;
-    const status = data.pr_status || "unknown";
-    const label = name;
-    const componentId = nodeToComponent[name];
-
-    g.setNode(name, {
-      label: label,
-      rx: 5,
-      ry: 5,
-      padding: 10,
-      style: `fill: ${getStatusColor(status)}; stroke: #333; stroke-width: 1px;`,
-      labelStyle: `fill: ${getStatusTextColor(status)}; font-size: 12px; font-weight: bold;`,
-    });
-
-    if (componentId) {
-      g.setParent(name, componentId);
-    }
-  });
-
-  // Add edges and child nodes using the edgeMap
-  const addedNodes = new Set(nodesWithChildren);
-
-  nodesWithChildren.forEach((name) => {
-    const nodeInfo = nodeMap[name];
-    if (!nodeInfo) return;
-
-    // Process all outgoing edges from this node
+    // Process all outgoing edges and add child nodes
     nodeInfo.outgoing.forEach((edgeId) => {
       const childId = edgeMap[edgeId].target;
-      const childNodeInfo = nodeMap[childId];
 
-      if (childNodeInfo && !addedNodes.has(childId)) {
-        // Add the child node if not already added
-        const childData = childNodeInfo.data;
-        const childStatus = childData.pr_status || "unknown";
-        const childLabel = childId;
-        const componentId = nodeToComponent[childId];
-
-        g.setNode(childId, {
-          label: childLabel,
-          rx: 5,
-          ry: 5,
-          padding: 10,
-          style: `fill: ${getStatusColor(childStatus)}; stroke: #333; stroke-width: 1px;`,
-          labelStyle: `fill: ${getStatusTextColor(childStatus)}; font-size: 12px; font-weight: bold;`,
-        });
-
-        if (componentId) {
-          g.setParent(childId, componentId);
-        }
-
-        addedNodes.add(childId);
-      }
+      // Add the child node (leaf node)
+      addNodeToGraph(g, childId, nodeMap, nodeToComponent, addedNodes);
 
       // Add edge with edge ID
       g.setEdge(name, childId, { ...EDGE_STYLE, edgeId });
