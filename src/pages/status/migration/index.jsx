@@ -598,16 +598,20 @@ function ImpactTable({ graphDataStructure, details }) {
       }
     });
 
-    let edgeIndex = 0;
-    const edgeIdMap = {}; // Map SVG element index to edge id
+    // Set edge IDs from graph data
     svgGroup.selectAll("g.edgePath").each(function () {
-      const edgeIds = Object.keys(edgeMap);
-      if (edgeIndex < edgeIds.length) {
-        const edgeId = edgeIds[edgeIndex];
-        d3.select(this).attr("data-edge-id", edgeId);
-        edgeIdMap[edgeIndex] = edgeId;
+      const edgeElement = d3.select(this);
+      const edges = graph.edges();
+      const edgeIndex = Array.from(svgGroup.selectAll("g.edgePath").nodes()).indexOf(this);
+
+      if (edgeIndex >= 0 && edgeIndex < edges.length) {
+        const edge = edges[edgeIndex];
+        const edgeData = graph.edge(edge);
+
+        if (edgeData && edgeData.edgeId) {
+          edgeElement.attr("data-edge-id", edgeData.edgeId);
+        }
       }
-      edgeIndex++;
     });
 
     svgGroup.selectAll("g.node").style("cursor", "pointer");
@@ -624,7 +628,7 @@ function ImpactTable({ graphDataStructure, details }) {
     svgGroup.selectAll("g.node").on("click", function () {
       const nodeId = d3.select(this).attr("data-node-id");
 
-      if (selectedNodeId === nodeId && selectedNodeId !== null) {
+      if (selectedNodeId === nodeId) {
         setSelectedNodeId(null);
         return;
       }

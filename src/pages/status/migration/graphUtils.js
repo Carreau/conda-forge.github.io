@@ -432,8 +432,8 @@ export const buildGraph = (nodeMap, edgeMap, components, nodesWithChildren, rank
         addedNodes.add(childId);
       }
 
-      // Add edge
-      g.setEdge(name, childId, { ...EDGE_STYLE });
+      // Add edge with edge ID
+      g.setEdge(name, childId, { ...EDGE_STYLE, edgeId });
     });
   });
 
