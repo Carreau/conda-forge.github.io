@@ -175,31 +175,31 @@
   box-sizing: border-box;
 }
 
-.searchDropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-top: none;
-  border-radius: 0 0 4px 4px;
-  background-color: var(--ifm-color-emphasis-0);
-  list-style: none;
-  margin: 0;
-  padding: 8px 0;
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 1000;
+/* Datalist styling */
+.datalist {
+  display: none;
 }
 
-.searchDropdownItem {
+/* Style option elements within datalist (works in Firefox and some other browsers) */
+.datalist option {
   padding: 8px 12px;
-  cursor: pointer;
+  background-color: var(--ifm-color-emphasis-0);
+  color: var(--ifm-color-emphasis-800);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
 }
 
-.searchDropdownItem:hover,
-.searchDropdownItemHighlighted {
+.datalist option:hover,
+.datalist option:focus {
   background-color: var(--ifm-color-emphasis-100);
+}
+
+.datalist option:checked,
+.datalist option:selected {
+  background: linear-gradient(
+    var(--ifm-color-primary),
+    var(--ifm-color-primary)
+  );
+  color: white;
 }
 
 .settingsButton {

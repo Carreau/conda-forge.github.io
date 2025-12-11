@@ -35,13 +35,11 @@ export default function DependencyGraph({ details, initialSelectedNode = null })
   const [selectedNodeId, setSelectedNodeId] = React.useState(null);
   const [isInitialized, setIsInitialized] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [showDropdown, setShowDropdown] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const [graphDirection, setGraphDirection] = React.useState("TB");
   const [graphRanker, setGraphRanker] = React.useState("network-simplex");
   const [graphAlign, setGraphAlign] = React.useState("");
   const [userConfirmedLargeGraph, setUserConfirmedLargeGraph] = React.useState(false);
-  const [highlightedIndex, setHighlightedIndex] = React.useState(-1);
 
   useEffect(() => {
     if (initialSelectedNode && graphDataStructure.nodeMap[initialSelectedNode]) {
@@ -228,11 +226,13 @@ export default function DependencyGraph({ details, initialSelectedNode = null })
       }
 
       setSelectedNodeId(nodeId);
+      setSearchTerm(nodeId);
     });
 
     svg.on("click", function (event) {
       if (event.target === this) {
         setSelectedNodeId(null);
+        setSearchTerm("");
         applyHighlight(svgGroup, null, zoomedGraphData);
       }
     });
@@ -281,9 +281,7 @@ export default function DependencyGraph({ details, initialSelectedNode = null })
 
   const handleSelectNode = (nodeName) => {
     setSelectedNodeId(nodeName);
-    setSearchTerm("");
-    setShowDropdown(false);
-    setHighlightedIndex(-1);
+    setSearchTerm(nodeName);
   };
 
   return (
@@ -308,12 +306,6 @@ export default function DependencyGraph({ details, initialSelectedNode = null })
               onSearchChange={setSearchTerm}
               filteredNodes={filteredNodes}
               onSelectNode={handleSelectNode}
-              onFocus={() => setShowDropdown(true)}
-              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-              highlightedIndex={highlightedIndex}
-              onHighlightedIndexChange={setHighlightedIndex}
-              showDropdown={showDropdown}
-              onShowDropdownChange={setShowDropdown}
             />
             <button
               onClick={() => setShowSettings(!showSettings)}
