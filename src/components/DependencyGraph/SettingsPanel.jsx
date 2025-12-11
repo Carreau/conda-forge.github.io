@@ -2,6 +2,30 @@ import React from "react";
 import graphStyles from "./graphStyles.module.css";
 
 /**
+ * Dropdown component for selecting from a list of options.
+ * Used for graph layout configuration (direction, ranker, alignment).
+ */
+function Dropdown({ id, label, value, onChange, options }) {
+  return (
+    <div>
+      <label className={graphStyles.settingLabel}>{label}</label>
+      <select
+        id={id}
+        className={graphStyles.settingSelect}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
  * SettingsPanel component provides controls for customizing the graph visualization.
  * Includes toggles for showing completed packages and options for graph layout settings.
  */
@@ -15,6 +39,27 @@ export default function SettingsPanel({
   graphAlign,
   onGraphAlignChange,
 }) {
+  const directionOptions = [
+    { value: "TB", label: "Top to Bottom" },
+    { value: "BT", label: "Bottom to Top" },
+    { value: "LR", label: "Left to Right" },
+    { value: "RL", label: "Right to Left" },
+  ];
+
+  const rankerOptions = [
+    { value: "network-simplex", label: "Network Simplex" },
+    { value: "tight-tree", label: "Tight Tree" },
+    { value: "longest-path", label: "Longest Path" },
+  ];
+
+  const alignOptions = [
+    { value: "", label: "Center (default)" },
+    { value: "UL", label: "Upper Left" },
+    { value: "UR", label: "Upper Right" },
+    { value: "DL", label: "Down Left" },
+    { value: "DR", label: "Down Right" },
+  ];
+
   return (
     <div className={graphStyles.settingsPanel}>
       {/* Beginning of top-right settings panel */}
@@ -35,53 +80,29 @@ export default function SettingsPanel({
 
       {/* Graph layout configuration grid */}
       <div className={graphStyles.settingsGrid}>
-        {/* Direction selector */}
-        <div>
-          <label className={graphStyles.settingLabel}>Direction</label>
-          <select
-            id="graph-direction"
-            className={graphStyles.settingSelect}
-            value={graphDirection}
-            onChange={(e) => onGraphDirectionChange(e.target.value)}
-          >
-            <option value="TB">Top to Bottom</option>
-            <option value="BT">Bottom to Top</option>
-            <option value="LR">Left to Right</option>
-            <option value="RL">Right to Left</option>
-          </select>
-        </div>
+        <Dropdown
+          id="graph-direction"
+          label="Direction"
+          value={graphDirection}
+          onChange={onGraphDirectionChange}
+          options={directionOptions}
+        />
 
-        {/* Ranker selector */}
-        <div>
-          <label className={graphStyles.settingLabel}>Ranker</label>
-          <select
-            id="graph-ranker"
-            className={graphStyles.settingSelect}
-            value={graphRanker}
-            onChange={(e) => onGraphRankerChange(e.target.value)}
-          >
-            <option value="network-simplex">Network Simplex</option>
-            <option value="tight-tree">Tight Tree</option>
-            <option value="longest-path">Longest Path</option>
-          </select>
-        </div>
+        <Dropdown
+          id="graph-ranker"
+          label="Ranker"
+          value={graphRanker}
+          onChange={onGraphRankerChange}
+          options={rankerOptions}
+        />
 
-        {/* Alignment selector */}
-        <div>
-          <label className={graphStyles.settingLabel}>Alignment</label>
-          <select
-            id="graph-align"
-            className={graphStyles.settingSelect}
-            value={graphAlign}
-            onChange={(e) => onGraphAlignChange(e.target.value)}
-          >
-            <option value="">Center (default)</option>
-            <option value="UL">Upper Left</option>
-            <option value="UR">Upper Right</option>
-            <option value="DL">Down Left</option>
-            <option value="DR">Down Right</option>
-          </select>
-        </div>
+        <Dropdown
+          id="graph-align"
+          label="Alignment"
+          value={graphAlign}
+          onChange={onGraphAlignChange}
+          options={alignOptions}
+        />
       </div>
 
       {/* End of top-right settings panel */}
