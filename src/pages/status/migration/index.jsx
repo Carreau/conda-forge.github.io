@@ -13,7 +13,7 @@ import moment from 'moment';
 import { compare } from '@site/src/components/StatusDashboard/current_migrations';
 import { useSorting, SortableHeader } from '@site/src/components/SortableTable';
 import * as d3 from "d3";
-import DependencyGraph from "./DependencyGraph";
+import DependencyGraph from "@site/src/components/DependencyGraph";
 
 // GitHub GraphQL MergeStateStatus documentation
 // Reference: https://docs.github.com/en/graphql/reference/enums#mergestatestatus
