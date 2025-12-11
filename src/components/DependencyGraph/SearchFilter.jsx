@@ -45,7 +45,7 @@ export default function SearchFilter({
           list={dataListId}
           autoComplete="off"
         />
-        {/* Datalist provides native browser autocomplete suggestions */}
+        {/* Datalist provides native browser autocomplete suggestions, but not stylable */}
         <datalist id={dataListId} className={graphStyles.datalist}>
           {filteredNodes.slice(0, 10).map((nodeName) => (
             <option key={nodeName} value={nodeName} />
