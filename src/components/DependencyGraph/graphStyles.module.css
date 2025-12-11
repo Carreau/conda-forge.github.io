@@ -1,4 +1,4 @@
-/* Migration Dependency Graph Styles */
+/* Migration Dependency Graph - Main Shared Styles */
 
 .dependencyGraphContainer {
   padding: 20px 0 0 0;
@@ -62,178 +62,6 @@
   margin: 0;
 }
 
-/* Toggle switch styles */
-.toggleLabel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-  position: relative;
-  user-select: none;
-}
-
-.toggleInput {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggleSlider {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-  background-color: var(--ifm-color-emphasis-400);
-  border-radius: 12px;
-  transition: background-color 0.2s;
-}
-
-.toggleSlider::before {
-  content: "";
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  left: 2px;
-  top: 2px;
-  background-color: white;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.toggleInput:checked + .toggleSlider {
-  background-color: var(--ifm-color-primary);
-}
-
-.toggleInput:checked + .toggleSlider::before {
-  transform: translateX(20px);
-}
-
-.toggleInput:focus + .toggleSlider {
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lighter);
-}
-
-.settingsPanel {
-  position: absolute;
-  top: 40px;
-  right: 0;
-  padding: 16px;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 4px;
-  background-color: var(--ifm-color-emphasis-0);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  min-width: 400px;
-}
-
-.settingsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.settingLabel {
-  display: block;
-  font-size: 12px;
-  margin-bottom: 4px;
-  font-weight: bold;
-}
-
-.settingSelect {
-  padding: 8px 12px;
-  font-size: 14px;
-  border-radius: 4px;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  width: 100%;
-  box-sizing: border-box;
-  background-color: var(--ifm-color-emphasis-0);
-  cursor: pointer;
-}
-
-.searchContainer {
-  position: relative;
-  max-width: 400px;
-  flex: 0 1 400px;
-}
-
-.searchInputWrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.searchInput {
-  padding: 8px 12px;
-  font-size: 14px;
-  border-radius: 4px;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Datalist styling */
-.datalist {
-  display: none;
-}
-
-/* Style option elements within datalist (works in Firefox and some other browsers) */
-.datalist option {
-  padding: 8px 12px;
-  background-color: var(--ifm-color-emphasis-0);
-  color: var(--ifm-color-emphasis-800);
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.datalist option:hover,
-.datalist option:focus {
-  background-color: var(--ifm-color-emphasis-100);
-}
-
-.datalist option:checked,
-.datalist option:selected {
-  background: linear-gradient(
-    var(--ifm-color-primary),
-    var(--ifm-color-primary)
-  );
-  color: white;
-}
-
-.settingsButton {
-  margin-top: 8px;
-  flex-shrink: 0;
-}
-
-.warningContainer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.warningContent {
-  text-align: center;
-  padding: 40px;
-}
-
-.warningIcon {
-  font-size: 48px;
-  margin-bottom: 20px;
-}
-
-.warningText {
-  margin-bottom: 20px;
-  max-width: 500px;
-}
-
-.warningButtons {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-
 .headerContainer {
   position: relative;
   width: 100%;
@@ -247,8 +75,9 @@
   justify-content: space-between;
 }
 
-.toggleContainer {
-  margin-bottom: 12px;
+.settingsButton {
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 
 /* SVG Node Status Colors - using style guide colors */
@@ -340,68 +169,4 @@
   fill: #000000 !important;
   font-size: 12px !important;
   font-weight: bold !important;
-}
-
-/* Legend styles */
-.legend {
-  padding: 10px 12px;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  background-color: var(--ifm-color-emphasis-0);
-}
-
-.legendItems {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.legendItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.legendCircle {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid var(--ifm-color-emphasis-800);
-  flex-shrink: 0;
-}
-
-.legendSuccess {
-  background-color: var(--ifm-color-success);
-}
-
-.legendDanger {
-  background-color: var(--ifm-color-danger);
-}
-
-.legendWarning {
-  background-color: var(--ifm-color-warning);
-}
-
-.legendInfo {
-  background-color: var(--ifm-color-info);
-}
-
-.legendAwaitingPr {
-  background-color: var(--ifm-color-emphasis-600);
-}
-
-.legendAwaitingParents {
-  background-color: var(--ifm-color-emphasis-500);
-}
-
-.legendDashed {
-  background-color: var(--ifm-color-emphasis-500);
-  border: 1px dashed var(--ifm-color-emphasis-800);
-  box-sizing: border-box;
-}
-
-.legendLabel {
-  color: var(--ifm-color-emphasis-800);
 }

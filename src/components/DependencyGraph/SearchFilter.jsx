@@ -1,5 +1,5 @@
 import React from "react";
-import graphStyles from "./graphStyles.module.css";
+import styles from "./SearchFilter.module.css";
 
 /**
  * SearchFilter component provides a native datalist-based selector for package search.
@@ -32,12 +32,12 @@ export default function SearchFilter({
   };
 
   return (
-    <div className={graphStyles.searchContainer}>
-      <div className={graphStyles.searchInputWrapper}>
+    <div className={styles.searchContainer}>
+      <div className={styles.searchInputWrapper}>
         {/* Search input with native datalist */}
         <input
           type="text"
-          className={graphStyles.searchInput}
+          className={styles.searchInput}
           placeholder="Search for package..."
           value={searchTerm}
           onChange={handleChange}
@@ -45,8 +45,8 @@ export default function SearchFilter({
           list={dataListId}
           autoComplete="off"
         />
-        {/* Datalist provides native browser autocomplete suggestions, but not stylable */}
-        <datalist id={dataListId} className={graphStyles.datalist}>
+        {/* Datalist provides native browser autocomplete suggestions */}
+        <datalist id={dataListId} className={styles.datalist}>
           {filteredNodes.slice(0, 10).map((nodeName) => (
             <option key={nodeName} value={nodeName} />
           ))}

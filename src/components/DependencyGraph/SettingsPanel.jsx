@@ -1,5 +1,5 @@
 import React from "react";
-import graphStyles from "./graphStyles.module.css";
+import styles from "./SettingsPanel.module.css";
 
 /**
  * Dropdown component for selecting from a list of options.
@@ -8,10 +8,10 @@ import graphStyles from "./graphStyles.module.css";
 function Dropdown({ id, label, value, onChange, options }) {
   return (
     <div>
-      <label className={graphStyles.settingLabel}>{label}</label>
+      <label className={styles.settingLabel}>{label}</label>
       <select
         id={id}
-        className={graphStyles.settingSelect}
+        className={styles.settingSelect}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -61,25 +61,25 @@ export default function SettingsPanel({
   ];
 
   return (
-    <div className={graphStyles.settingsPanel}>
+    <div className={styles.settingsPanel}>
       {/* Beginning of top-right settings panel */}
 
       {/* Toggle for showing completed packages */}
-      <div className={graphStyles.toggleContainer}>
-        <label className={graphStyles.toggleLabel}>
+      <div className={styles.toggleContainer}>
+        <label className={styles.toggleLabel}>
           <span>Include completed packages</span>
           <input
             type="checkbox"
-            className={graphStyles.toggleInput}
+            className={styles.toggleInput}
             checked={showDoneNodes}
             onChange={(e) => onShowDoneNodesChange(e.target.checked)}
           />
-          <span className={graphStyles.toggleSlider}></span>
+          <span className={styles.toggleSlider}></span>
         </label>
       </div>
 
       {/* Graph layout configuration grid */}
-      <div className={graphStyles.settingsGrid}>
+      <div className={styles.settingsGrid}>
         <Dropdown
           id="graph-direction"
           label="Direction"

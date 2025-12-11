@@ -1,5 +1,5 @@
 import React from "react";
-import graphStyles from "./graphStyles.module.css";
+import styles from "./GraphTooLargeWarning.module.css";
 
 const LARGE_GRAPH_THRESHOLD = 1000;
 
@@ -14,18 +14,18 @@ export default function GraphTooLargeWarning({
   onHideDoneNodes,
 }) {
   return (
-    <div className={`${graphStyles.graphContainer} ${graphStyles.warningContainer}`}>
-      <div className={graphStyles.warningContent}>
-        <div className={graphStyles.warningIcon}>⚠️</div>
+    <div className={styles.warningContainer}>
+      <div className={styles.warningContent}>
+        <div className={styles.warningIcon}>⚠️</div>
 
         <h3>Large Graph Warning</h3>
 
-        <p className={graphStyles.warningText}>
+        <p className={styles.warningText}>
           This graph contains <strong>{nodeCount.toLocaleString()} nodes</strong>.
           Rendering more than {LARGE_GRAPH_THRESHOLD.toLocaleString()} nodes may slow down your browser and affect performance.
         </p>
 
-        <div className={graphStyles.warningButtons}>
+        <div className={styles.warningButtons}>
           <button
             onClick={onConfirm}
             className="button button--primary"

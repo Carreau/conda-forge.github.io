@@ -1,14 +1,14 @@
 import React from "react";
-import graphStyles from "./graphStyles.module.css";
+import styles from "./Legend.module.css";
 
 /**
  * LegendItem component that displays a single legend entry with a colored circle and label.
  */
 function LegendItem({ colorClass, label }) {
   return (
-    <div className={graphStyles.legendItem}>
-      <span className={`${graphStyles.legendCircle} ${colorClass}`}></span>
-      <span className={graphStyles.legendLabel}>{label}</span>
+    <div className={styles.legendItem}>
+      <span className={`${styles.legendCircle} ${colorClass}`}></span>
+      <span className={styles.legendLabel}>{label}</span>
     </div>
   );
 }
@@ -19,16 +19,16 @@ function LegendItem({ colorClass, label }) {
  */
 export default function Legend() {
   const items = [
-    { colorClass: graphStyles.legendSuccess, label: "CI Passing" },
-    { colorClass: graphStyles.legendDanger, label: "CI Failing" },
-    { colorClass: graphStyles.legendWarning, label: "Bot/Solver Error or Status Unknown" },
-    { colorClass: graphStyles.legendAwaitingPr, label: "Awaiting PR" },
-    { colorClass: graphStyles.legendAwaitingParents, label: "Awaiting Parents" },
-    { colorClass: graphStyles.legendDashed, label: "Awaiting Parent in Another Migration" },
+    { colorClass: styles.legendSuccess, label: "CI Passing" },
+    { colorClass: styles.legendDanger, label: "CI Failing" },
+    { colorClass: styles.legendWarning, label: "Bot/Solver Error or Status Unknown" },
+    { colorClass: styles.legendAwaitingPr, label: "Awaiting PR" },
+    { colorClass: styles.legendAwaitingParents, label: "Awaiting Parents" },
+    { colorClass: styles.legendDashed, label: "Awaiting Parent in Another Migration" },
   ];
 
   return (
-    <div className={`${graphStyles.legend} ${graphStyles.legendItems}`}>
+    <div className={`${styles.legend} ${styles.legendItems}`}>
       {items.map((item) => (
         <LegendItem key={item.label} colorClass={item.colorClass} label={item.label} />
       ))}
