@@ -16,18 +16,15 @@ export default function GraphTooLargeWarning({
   return (
     <div className={`${graphStyles.graphContainer} ${graphStyles.warningContainer}`}>
       <div className={graphStyles.warningContent}>
-        {/* Warning icon */}
         <div className={graphStyles.warningIcon}>⚠️</div>
 
         <h3>Large Graph Warning</h3>
 
-        {/* Warning message with node count */}
         <p className={graphStyles.warningText}>
           This graph contains <strong>{nodeCount.toLocaleString()} nodes</strong>.
           Rendering more than {LARGE_GRAPH_THRESHOLD.toLocaleString()} nodes may slow down your browser and affect performance.
         </p>
 
-        {/* Action buttons */}
         <div className={graphStyles.warningButtons}>
           <button
             onClick={onConfirm}
